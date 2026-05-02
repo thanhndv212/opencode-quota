@@ -35,7 +35,9 @@ export const googleAntigravityProvider: QuotaProvider = {
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
     const modelIds = ctx.config.googleModels as GoogleModelId[];
-    const result = await queryGoogleQuota(modelIds);
+    const result = await queryGoogleQuota(modelIds, {
+      requestTimeoutMs: ctx.config?.requestTimeoutMs,
+    });
 
     if (!result) {
       return notAttemptedResult();

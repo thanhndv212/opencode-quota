@@ -190,6 +190,7 @@ export async function runCliShowCommand(options: RunCliShowCommandOptions = {}):
     const result = await collectQuotaRenderData({
       client: runtime.client,
       config,
+      configMeta: runtime.configMeta,
       request: createQuotaRuntimeRequestContext(runtime),
       surfaceExplicitProviderIssues: true,
       formatStyle: resolveQuotaFormatStyle(config.formatStyle),

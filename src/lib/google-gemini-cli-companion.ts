@@ -3,6 +3,8 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { getOpencodeRuntimeDirCandidates } from "./opencode-runtime-paths.js";
+
 const require = createRequire(import.meta.url);
 
 const COMPANION_PACKAGE_NAME = "opencode-gemini-auth";
@@ -78,6 +80,21 @@ function normalizeCredential(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function getCompanionResolvePaths(): string[] {
+  return getOpencodeRuntimeDirCandidates().cacheDirs;
+}
+
+function resolveCompanionSpecifier(specifier: string): string {
+  try {
+    return require.resolve(specifier);
+  } catch (error) {
+    if (!isModuleNotFoundError(error)) {
+      throw error;
+    }
+    return require.resolve(specifier, { paths: getCompanionResolvePaths() });
+  }
+}
+
 function buildConfiguredState(params: {
   importSpecifier: string;
   resolvedPath: string;
@@ -124,12 +141,38 @@ function parseSourceCredentials(content: string): { clientId: string; clientSecr
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
+function getRuntimeSourceConstantPaths(): string[] {
+  return getCompanionResolvePaths().map((cacheDir) =>
+    join(cacheDir, "node_modules", COMPANION_PACKAGE_NAME, "src", "constants.ts"),
+  );
+}
+
+async function tryReadSourceConstantsPath(
+  resolvedPath: string,
+): Promise<ResolvedCompanionState | null> {
+  try {
+    const content = await readFile(resolvedPath, "utf8");
+    const credentials = parseSourceCredentials(content);
+    if (!credentials) {
+      return buildInvalidState(COMPANION_SOURCE_IMPORT_SPECIFIER, resolvedPath);
+    }
+    return buildConfiguredState({
+      importSpecifier: COMPANION_SOURCE_IMPORT_SPECIFIER,
+      resolvedPath,
+      clientId: credentials.clientId,
+      clientSecret: credentials.clientSecret,
+    });
+  } catch {
+    return null;
+  }
+}
+
 async function tryResolveJsConstants(
   importSpecifier: string,
 ): Promise<ResolvedCompanionState | null> {
   let resolvedPath: string;
   try {
-    resolvedPath = require.resolve(importSpecifier);
+    resolvedPath = resolveCompanionSpecifier(importSpecifier);
   } catch (error) {
     if (isModuleNotFoundError(error)) {
       return null;
@@ -162,8 +205,15 @@ async function tryResolveSourceConstants(): Promise<ResolvedCompanionState | nul
       return buildInvalidState(COMPANION_SOURCE_IMPORT_SPECIFIER);
     }
 
+    for (const candidatePath of getRuntimeSourceConstantPaths()) {
+      const runtimeResolved = await tryReadSourceConstantsPath(candidatePath);
+      if (runtimeResolved) {
+        return runtimeResolved;
+      }
+    }
+
     try {
-      const packageJsonPath = require.resolve(COMPANION_PACKAGE_JSON_SPECIFIER);
+      const packageJsonPath = resolveCompanionSpecifier(COMPANION_PACKAGE_JSON_SPECIFIER);
       resolvedPath = join(dirname(packageJsonPath), "src", "constants.ts");
     } catch (packageError) {
       return isModuleNotFoundError(packageError)
@@ -172,21 +222,10 @@ async function tryResolveSourceConstants(): Promise<ResolvedCompanionState | nul
     }
   }
 
-  try {
-    const content = await readFile(resolvedPath, "utf8");
-    const credentials = parseSourceCredentials(content);
-    if (!credentials) {
-      return buildInvalidState(COMPANION_SOURCE_IMPORT_SPECIFIER, resolvedPath);
-    }
-    return buildConfiguredState({
-      importSpecifier: COMPANION_SOURCE_IMPORT_SPECIFIER,
-      resolvedPath,
-      clientId: credentials.clientId,
-      clientSecret: credentials.clientSecret,
-    });
-  } catch {
-    return buildInvalidState(COMPANION_SOURCE_IMPORT_SPECIFIER, resolvedPath);
-  }
+  return (
+    (await tryReadSourceConstantsPath(resolvedPath)) ??
+    buildInvalidState(COMPANION_SOURCE_IMPORT_SPECIFIER, resolvedPath)
+  );
 }
 
 async function resolveCompanionState(): Promise<ResolvedCompanionState> {

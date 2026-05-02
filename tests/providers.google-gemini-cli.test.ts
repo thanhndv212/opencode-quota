@@ -9,6 +9,20 @@ vi.mock("../src/lib/google-gemini-cli.js", () => ({
 }));
 
 describe("google gemini cli provider", () => {
+  it("preserves the Gemini CLI quota timeout default unless requestTimeoutMs is user-configured", async () => {
+    const { queryGeminiCliQuota } = await import("../src/lib/google-gemini-cli.js");
+    (queryGeminiCliQuota as any).mockResolvedValue(null);
+
+    await googleGeminiCliProvider.fetch({ client: {}, config: { requestTimeoutMs: 5000 } } as any);
+    expect(queryGeminiCliQuota).toHaveBeenLastCalledWith({}, { requestTimeoutMs: undefined });
+
+    await googleGeminiCliProvider.fetch({
+      client: {},
+      config: { requestTimeoutMs: 12000, requestTimeoutMsConfigured: true },
+    } as any);
+    expect(queryGeminiCliQuota).toHaveBeenLastCalledWith({}, { requestTimeoutMs: 12000 });
+  });
+
   it("returns attempted:false when Gemini CLI auth is not configured", async () => {
     const { queryGeminiCliQuota } = await import("../src/lib/google-gemini-cli.js");
     (queryGeminiCliQuota as any).mockResolvedValueOnce(null);

@@ -27,6 +27,9 @@ export interface PricingSnapshotConfig {
   autoRefresh: number;
 }
 
+/** Request timeout in milliseconds */
+export const REQUEST_TIMEOUT_MS = 5000;
+
 /** Plugin configuration from opencode-quota/quota-toast.json or legacy experimental.quotaToast. */
 export interface QuotaToastConfig {
   enabled: boolean;
@@ -47,6 +50,9 @@ export interface QuotaToastConfig {
   /** Shared percent meaning for popup toasts and the TUI sidebar. */
   percentDisplayMode: PercentDisplayMode;
   minIntervalMs: number;
+
+  /** Request timeout in milliseconds for remote provider API calls. */
+  requestTimeoutMs: number;
 
   /**
    * Debug mode for troubleshooting.
@@ -119,6 +125,7 @@ export const DEFAULT_CONFIG: QuotaToastConfig = {
   formatStyle: DEFAULT_QUOTA_FORMAT_STYLE,
   percentDisplayMode: "remaining",
   minIntervalMs: 300000, // 5 minutes
+  requestTimeoutMs: REQUEST_TIMEOUT_MS,
 
   debug: false,
 
@@ -616,9 +623,6 @@ export interface CachedToast {
 // =============================================================================
 // Constants
 // =============================================================================
-
-/** Request timeout in milliseconds */
-export const REQUEST_TIMEOUT_MS = 5000;
 
 /** Model key mapping for Google API */
 export const GOOGLE_MODEL_KEYS: Record<

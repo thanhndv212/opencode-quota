@@ -122,9 +122,35 @@ async function runProviderFetch(opencodeGoWindows?: Array<"rolling" | "weekly" |
   return opencodeGoProvider.fetch({ config: { opencodeGoWindows } } as any);
 }
 
+async function runProviderFetchWithConfig(config: Record<string, unknown>) {
+  return opencodeGoProvider.fetch({ config } as any);
+}
+
 describe("opencode-go provider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it("preserves the OpenCode Go scrape timeout default unless requestTimeoutMs is user-configured", async () => {
+    mockConfigConfigured();
+    mockDashboardSuccess(buildDashboardHtml(7, 18000, 2, 540000, 16, 2480000));
+
+    await runProviderFetchWithConfig({ requestTimeoutMs: 5000 });
+    expect(mocks.fetchWithTimeout).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      10_000,
+    );
+
+    mockConfigConfigured();
+    mockDashboardSuccess(buildDashboardHtml(7, 18000, 2, 540000, 16, 2480000));
+
+    await runProviderFetchWithConfig({ requestTimeoutMs: 12000, requestTimeoutMsConfigured: true });
+    expect(mocks.fetchWithTimeout).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      12000,
+    );
   });
 
   it("returns attempted:false when config is none", async () => {

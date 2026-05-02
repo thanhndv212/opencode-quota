@@ -5,7 +5,7 @@
  */
 
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
-import { queryCopilotQuota } from "../lib/copilot.js";
+import { hasCopilotQuotaRuntimeAvailable, queryCopilotQuota } from "../lib/copilot.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
 import {
   modelIncludesAny,
@@ -42,11 +42,20 @@ export const copilotProvider: QuotaProvider = {
   id: "copilot",
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
-    return isCanonicalProviderAvailable({
+    const providerAvailable = await isCanonicalProviderAvailable({
       ctx,
       providerId: "copilot",
       fallbackOnError: false,
     });
+    if (providerAvailable) {
+      return true;
+    }
+
+    try {
+      return await hasCopilotQuotaRuntimeAvailable();
+    } catch {
+      return false;
+    }
   },
 
   matchesCurrentModel(model: string): boolean {
@@ -59,8 +68,8 @@ export const copilotProvider: QuotaProvider = {
     return modelIncludesAny(model, ["copilot", "github-copilot"]);
   },
 
-  async fetch(_ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryCopilotQuota();
+  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
+    const result = await queryCopilotQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

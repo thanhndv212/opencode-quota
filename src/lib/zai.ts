@@ -16,7 +16,7 @@ import { resolveZaiAuthCached } from "./zai-auth.js";
 
 const ZAI_QUOTA_URL = "https://api.z.ai/api/monitor/usage/quota/limit";
 
-export async function queryZaiQuota(): Promise<ZaiResult> {
+export async function queryZaiQuota(options: { requestTimeoutMs?: number } = {}): Promise<ZaiResult> {
   const auth = await resolveZaiAuthCached();
   if (auth.state === "none") return null;
   if (auth.state === "invalid") {
@@ -30,7 +30,7 @@ export async function queryZaiQuota(): Promise<ZaiResult> {
       "Content-Type": "application/json",
     };
 
-    const resp = await fetchWithTimeout(ZAI_QUOTA_URL, { headers });
+    const resp = await fetchWithTimeout(ZAI_QUOTA_URL, { headers }, options.requestTimeoutMs);
     if (!resp.ok) {
       const text = await resp.text();
       return {

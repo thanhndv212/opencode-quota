@@ -37,18 +37,22 @@ export {
   type ChutesKeySource,
 } from "./chutes-config.js";
 
-export async function queryChutesQuota(): Promise<ChutesResult> {
+export async function queryChutesQuota(options: { requestTimeoutMs?: number } = {}): Promise<ChutesResult> {
   const resolved = await resolveChutesApiKey();
   if (!resolved) return null;
 
   try {
-    const resp = await fetchWithTimeout(CHUTES_QUOTA_URL, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${resolved.key}`,
-        "User-Agent": "OpenCode-Quota-Toast/1.0",
+    const resp = await fetchWithTimeout(
+      CHUTES_QUOTA_URL,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${resolved.key}`,
+          "User-Agent": "OpenCode-Quota-Toast/1.0",
+        },
       },
-    });
+      options.requestTimeoutMs,
+    );
 
     if (!resp.ok) {
       const text = await resp.text();

@@ -165,15 +165,22 @@ function selectCanonicalMiniMaxModel(models: MiniMaxModelRemain[]): MiniMaxModel
  * @returns Quota entries on success, error on failure, or empty entries when
  *          the API returns successfully but no models have reportable quota.
  */
-export async function queryMiniMaxQuota(apiKey: string): Promise<MiniMaxResult> {
+export async function queryMiniMaxQuota(
+  apiKey: string,
+  options: { requestTimeoutMs?: number } = {},
+): Promise<MiniMaxResult> {
   try {
-    const response = await fetchWithTimeout(MINIMAX_API_URL, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "User-Agent": USER_AGENT,
+    const response = await fetchWithTimeout(
+      MINIMAX_API_URL,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "User-Agent": USER_AGENT,
+        },
       },
-    });
+      options.requestTimeoutMs,
+    );
 
     if (!response.ok) {
       const text = await response.text();
@@ -232,7 +239,7 @@ export const minimaxCodingPlanProvider: QuotaProvider = {
     return normalizeQuotaProviderId(provider) === "minimax-coding-plan" && Boolean(modelId) && isMiniMaxCodingModelName(modelId);
   },
 
-  async fetch(_ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
+  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
     const auth = await resolveMiniMaxAuthCached({
       maxAgeMs: DEFAULT_MINIMAX_AUTH_CACHE_MAX_AGE_MS,
     });
@@ -245,7 +252,9 @@ export const minimaxCodingPlanProvider: QuotaProvider = {
       return attemptedErrorResult(MINIMAX_PROVIDER_LABEL, auth.error);
     }
 
-    const result = await queryMiniMaxQuota(auth.apiKey);
+    const result = await queryMiniMaxQuota(auth.apiKey, {
+      requestTimeoutMs: ctx.config?.requestTimeoutMs,
+    });
 
     if (!result.success) {
       return attemptedErrorResult(MINIMAX_PROVIDER_LABEL, result.error);

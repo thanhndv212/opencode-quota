@@ -184,7 +184,7 @@ export async function hasOpenAIOAuthCached(params?: {
   return hasOpenAIOAuth(auth);
 }
 
-export async function queryOpenAIQuota(): Promise<OpenAIResult> {
+export async function queryOpenAIQuota(options: { requestTimeoutMs?: number } = {}): Promise<OpenAIResult> {
   const auth = await readAuthFileCached({
     maxAgeMs: DEFAULT_OPENAI_AUTH_CACHE_MAX_AGE_MS,
   });
@@ -206,7 +206,7 @@ export async function queryOpenAIQuota(): Promise<OpenAIResult> {
       headers["ChatGPT-Account-Id"] = accountId;
     }
 
-    const resp = await fetchWithTimeout(OPENAI_USAGE_URL, { headers });
+    const resp = await fetchWithTimeout(OPENAI_USAGE_URL, { headers }, options.requestTimeoutMs);
     if (!resp.ok) {
       const text = await resp.text();
       return {

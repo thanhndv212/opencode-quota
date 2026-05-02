@@ -26,8 +26,8 @@ export const chutesProvider: QuotaProvider = {
     return modelProviderIncludesAny(model, ["chutes"]);
   },
 
-  async fetch(_ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryChutesQuota();
+  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
+    const result = await queryChutesQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

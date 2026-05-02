@@ -94,6 +94,7 @@ function normalizeWindowUsage(window: ScrapedWindowUsage, now: number): OpenCode
 export async function queryOpenCodeGoQuota(
   workspaceId: string,
   authCookie: string,
+  options: { requestTimeoutMs?: number } = {},
 ): Promise<OpenCodeGoResult> {
   try {
     const url = `${DASHBOARD_URL_PREFIX}${encodeURIComponent(workspaceId)}${DASHBOARD_URL_SUFFIX}`;
@@ -108,7 +109,7 @@ export async function queryOpenCodeGoQuota(
           Cookie: `auth=${authCookie}`,
         },
       },
-      SCRAPE_TIMEOUT_MS,
+      options.requestTimeoutMs ?? SCRAPE_TIMEOUT_MS,
     );
 
     if (!response.ok) {

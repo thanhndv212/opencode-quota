@@ -917,6 +917,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const quotaResult = await collectQuotaRenderData({
       client: runtime.client,
       config: runtimeConfig,
+      configMeta: runtime.configMeta,
       request: quotaRequestContext,
       surfaceExplicitProviderIssues: true,
       formatStyle: resolveQuotaFormatStyle(runtimeConfig.formatStyle),
@@ -1248,6 +1249,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const quotaResult = await collectQuotaRenderData({
       client: runtime.client,
       config: runtime.config,
+      configMeta: runtime.configMeta,
       request,
       surfaceExplicitProviderIssues: false,
       formatStyle: ALL_WINDOWS_FORMAT_STYLE,
@@ -1366,6 +1368,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         providerLiveProbes = await collectQuotaStatusLiveProbes({
           client: runtime.client,
           config: runtimeConfig,
+          configMeta: runtime.configMeta,
           request: createQuotaRuntimeRequestContext(runtime),
           formatStyle: SINGLE_WINDOW_PER_PROVIDER_FORMAT_STYLE,
           providers: liveProbeProviders,

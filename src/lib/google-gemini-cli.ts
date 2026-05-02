@@ -357,6 +357,7 @@ async function refreshGeminiCliAccessTokenWithCache(params: {
   credentials: GeminiCliConfiguredCredentials;
   skewMs?: number;
   force?: boolean;
+  timeoutMs?: number;
 }): Promise<{ accessToken: string } | { error: string }> {
   const skewMs = params.skewMs ?? 2 * 60_000;
   const key = makeAccountCacheKey({
@@ -382,6 +383,7 @@ async function refreshGeminiCliAccessTokenWithCache(params: {
     refreshToken: params.account.refreshToken,
     clientId: params.credentials.clientId,
     clientSecret: params.credentials.clientSecret,
+    timeoutMs: params.timeoutMs,
   });
   if ("error" in refreshed) return refreshed;
 
@@ -401,6 +403,7 @@ async function refreshGeminiCliAccessTokenWithCache(params: {
 async function retrieveGeminiCliQuota(
   accessToken: string,
   projectId: string,
+  timeoutMs: number = GEMINI_QUOTA_TIMEOUT_MS,
 ): Promise<RetrieveUserQuotaResponse> {
   const response = await fetchWithTimeout(
     GEMINI_QUOTA_API_URL,
@@ -413,7 +416,7 @@ async function retrieveGeminiCliQuota(
       },
       body: JSON.stringify({ project: projectId }),
     },
-    GEMINI_QUOTA_TIMEOUT_MS,
+    timeoutMs,
   );
 
   if (!response.ok) {
@@ -540,6 +543,7 @@ function mapQuotaBuckets(
 async function fetchAccountQuota(params: {
   account: GeminiCliAccount;
   credentials: GeminiCliConfiguredCredentials;
+  timeoutMs?: number;
 }): Promise<{
   success: boolean;
   buckets?: GeminiCliQuotaBucket[];
@@ -552,6 +556,7 @@ async function fetchAccountQuota(params: {
     const tokenResult = await refreshGeminiCliAccessTokenWithCache({
       account: params.account,
       credentials: params.credentials,
+      timeoutMs: params.timeoutMs,
     });
     if ("error" in tokenResult) {
       return { success: false, error: tokenResult.error, accountEmail };
@@ -559,18 +564,27 @@ async function fetchAccountQuota(params: {
 
     let quota: RetrieveUserQuotaResponse;
     try {
-      quota = await retrieveGeminiCliQuota(tokenResult.accessToken, params.account.projectId);
+      quota = await retrieveGeminiCliQuota(
+        tokenResult.accessToken,
+        params.account.projectId,
+        params.timeoutMs,
+      );
     } catch (err) {
       if (err instanceof Error && err.message.includes("auth error")) {
         const retryToken = await refreshGeminiCliAccessTokenWithCache({
           account: params.account,
           credentials: params.credentials,
           force: true,
+          timeoutMs: params.timeoutMs,
         });
         if ("error" in retryToken) {
           return { success: false, error: retryToken.error, accountEmail };
         }
-        quota = await retrieveGeminiCliQuota(retryToken.accessToken, params.account.projectId);
+        quota = await retrieveGeminiCliQuota(
+          retryToken.accessToken,
+          params.account.projectId,
+          params.timeoutMs,
+        );
       } else {
         throw err;
       }
@@ -593,7 +607,10 @@ async function fetchAccountQuota(params: {
   }
 }
 
-export async function queryGeminiCliQuota(client?: ConfigClient): Promise<GeminiCliResult> {
+export async function queryGeminiCliQuota(
+  client?: ConfigClient,
+  options: { requestTimeoutMs?: number } = {},
+): Promise<GeminiCliResult> {
   const [auth, configuredProjectId] = await Promise.all([
     readAuthFileCached({ maxAgeMs: DEFAULT_GEMINI_CLI_AUTH_CACHE_MAX_AGE_MS }),
     resolveGeminiCliConfiguredProjectId(client),
@@ -614,7 +631,8 @@ export async function queryGeminiCliQuota(client?: ConfigClient): Promise<Gemini
   const results = await mapWithConcurrency({
     items: accounts,
     concurrency: GEMINI_ACCOUNTS_CONCURRENCY,
-    fn: async (account) => fetchAccountQuota({ account, credentials }),
+    fn: async (account) =>
+      fetchAccountQuota({ account, credentials, timeoutMs: options.requestTimeoutMs }),
   });
 
   const allBuckets: GeminiCliQuotaBucket[] = [];

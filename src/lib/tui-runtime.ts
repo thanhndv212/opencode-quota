@@ -127,6 +127,7 @@ export async function loadSidebarPanel(params: {
   const result = await collectQuotaRenderData({
     client: runtime.client,
     config: runtime.config,
+    configMeta: runtime.configMeta,
     request,
     surfaceExplicitProviderIssues: true,
     formatStyle,

@@ -34,6 +34,7 @@ export const QUOTA_TOAST_SETTING_SOURCE_KEYS = [
   "formatStyle",
   "percentDisplayMode",
   "minIntervalMs",
+  "requestTimeoutMs",
   "debug",
   "enabledProviders",
   "anthropicBinaryPath",
@@ -99,6 +100,7 @@ const NETWORK_SETTING_SOURCE_KEYS = [
   "enabled",
   "enabledProviders",
   "minIntervalMs",
+  "requestTimeoutMs",
   "pricingSnapshot.source",
   "pricingSnapshot.autoRefresh",
   "showOnIdle",
@@ -116,6 +118,7 @@ type ValidatedQuotaToastPatch = {
   formatStyle?: QuotaToastConfig["formatStyle"];
   percentDisplayMode?: PercentDisplayMode;
   minIntervalMs?: number;
+  requestTimeoutMs?: number;
   debug?: boolean;
   enabledProviders?: string[] | "auto";
   enabledProvidersInvalidEmpty?: boolean;
@@ -396,6 +399,13 @@ function extractValidatedQuotaToastPatch(
     patch.minIntervalMs = quotaToastConfig.minIntervalMs;
   }
 
+  if (
+    hasOwnKey(quotaToastConfig, "requestTimeoutMs") &&
+    isPositiveNumber(quotaToastConfig.requestTimeoutMs)
+  ) {
+    patch.requestTimeoutMs = quotaToastConfig.requestTimeoutMs;
+  }
+
   if (hasOwnKey(quotaToastConfig, "debug") && typeof quotaToastConfig.debug === "boolean") {
     patch.debug = quotaToastConfig.debug;
   }
@@ -559,6 +569,11 @@ function applyValidatedQuotaToastPatch(
   if (hasOwnKey(patch, "minIntervalMs")) {
     config.minIntervalMs = patch.minIntervalMs!;
     applySettingSource(settingSources, "minIntervalMs", sourcePath);
+  }
+
+  if (hasOwnKey(patch, "requestTimeoutMs")) {
+    config.requestTimeoutMs = patch.requestTimeoutMs!;
+    applySettingSource(settingSources, "requestTimeoutMs", sourcePath);
   }
 
   if (hasOwnKey(patch, "debug")) {

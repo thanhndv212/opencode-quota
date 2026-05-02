@@ -96,7 +96,7 @@ export const opencodeGoProvider: QuotaProvider = {
     return normalizeQuotaProviderId(provider) === "opencode-go";
   },
 
-  async fetch(_ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
+  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
     const config = await resolveOpenCodeGoConfigCached({
       maxAgeMs: DEFAULT_OPENCODE_GO_CONFIG_CACHE_MAX_AGE_MS,
     });
@@ -119,7 +119,11 @@ export const opencodeGoProvider: QuotaProvider = {
       );
     }
 
-    const result = await queryOpenCodeGoQuota(config.config.workspaceId, config.config.authCookie);
+    const result = await queryOpenCodeGoQuota(config.config.workspaceId, config.config.authCookie, {
+      requestTimeoutMs: ctx.config?.requestTimeoutMsConfigured
+        ? ctx.config.requestTimeoutMs
+        : undefined,
+    });
 
     if (!result) {
       return notAttemptedResult();
@@ -129,7 +133,7 @@ export const opencodeGoProvider: QuotaProvider = {
       return attemptedErrorResult(OPENCODE_GO_PROVIDER_LABEL, result.error);
     }
 
-    const windows = _ctx.config.opencodeGoWindows ?? OPENCODE_GO_WINDOW_ORDER;
+    const windows = ctx.config.opencodeGoWindows ?? OPENCODE_GO_WINDOW_ORDER;
     const entries = buildOpenCodeGoEntries(result, windows);
     const missingSelectedWindows = windows.filter((window) => !result[window]);
 

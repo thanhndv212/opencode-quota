@@ -47,7 +47,7 @@ export const zaiProvider: QuotaProvider = {
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryZaiQuota();
+    const result = await queryZaiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

@@ -34,7 +34,7 @@ export const nanoGptProvider: QuotaProvider = {
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryNanoGptQuota();
+    const result = await queryNanoGptQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

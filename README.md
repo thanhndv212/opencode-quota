@@ -134,12 +134,16 @@ Providers are auto-detected by default. To choose providers explicitly:
 }
 ```
 
-### Common options
+### Common Options
+
+Customize these settings in `opencode-quota/quota-toast.json`.
+
+<details>
+<summary>Example customizations</summary>
 
 Show every quota window instead of the default most-constrained window:
 
 ```jsonc
-// opencode-quota/quota-toast.json
 {
   "formatStyle": "allWindows",
 }
@@ -148,7 +152,6 @@ Show every quota window instead of the default most-constrained window:
 Choose which OpenCode Go windows to display:
 
 ```jsonc
-// opencode-quota/quota-toast.json
 {
   "opencodeGoWindows": ["rolling", "weekly", "monthly"],
 }
@@ -157,7 +160,6 @@ Choose which OpenCode Go windows to display:
 Show percentages as used instead of remaining in toasts and the sidebar:
 
 ```jsonc
-// opencode-quota/quota-toast.json
 {
   "percentDisplayMode": "used",
 }
@@ -166,11 +168,20 @@ Show percentages as used instead of remaining in toasts and the sidebar:
 Turn off popup toasts while keeping `/quota` and the sidebar:
 
 ```jsonc
-// opencode-quota/quota-toast.json
 {
   "enableToast": false,
 }
 ```
+
+Increase the remote provider request timeout from the default 5000ms (providers with custom defaults, such as Gemini CLI and OpenCode Go, keep their provider default unless you set this):
+
+```jsonc
+{
+  "requestTimeoutMs": 12000,
+}
+```
+
+</details>
 
 ### Commands
 
@@ -472,6 +483,10 @@ Run `/quota_status` and check pricing snapshot health plus OpenCode database pat
 | Cursor model has unknown pricing | Run `/pricing_refresh`; Cursor `auto` and `composer*` use bundled deterministic pricing. |
 
 </details>
+
+### Issues
+
+Please use the Bug report or Feature request templates when opening issues. Freeform issues, or bug/feature issues missing the required template sections, may be automatically commented on and closed.
 
 ### License
 

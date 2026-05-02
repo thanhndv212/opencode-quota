@@ -39,8 +39,8 @@ export const openaiProvider: QuotaProvider = {
     return modelProviderIncludesAny(model, ["openai", "chatgpt", "codex"]);
   },
 
-  async fetch(_ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryOpenAIQuota();
+  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
+    const result = await queryOpenAIQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

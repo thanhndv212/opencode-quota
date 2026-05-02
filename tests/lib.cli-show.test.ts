@@ -306,6 +306,56 @@ describe("runCliShowCommand", () => {
     expect(provider.fetch).not.toHaveBeenCalled();
   });
 
+  it("renders Copilot and Gemini CLI success rows in standalone show", async () => {
+    const copilotProvider = {
+      id: "copilot",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi.fn().mockResolvedValue({
+        attempted: true,
+        entries: [{ name: "Copilot", group: "Copilot (personal)", label: "Quota:", right: "0/300", percentRemaining: 100 }],
+        errors: [],
+      }),
+    };
+    const geminiCliProvider = {
+      id: "google-gemini-cli",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi.fn().mockResolvedValue({
+        attempted: true,
+        entries: [{ name: "Gemini Pro", group: "Gemini CLI", label: "Gemini Pro:", right: "840 left", percentRemaining: 84 }],
+        errors: [],
+      }),
+    };
+    mockProviders.push(copilotProvider, geminiCliProvider);
+    writeFileSync(
+      join(workspaceDir, "opencode.json"),
+      JSON.stringify({
+        experimental: {
+          quotaToast: {
+            enabledProviders: ["copilot", "google-gemini-cli"],
+            formatStyle: "allWindows",
+          },
+        },
+      }),
+      "utf8",
+    );
+    const stdout = createCaptureStream();
+    const stderr = createCaptureStream();
+
+    const code = await runCliShowCommand({
+      argv: [],
+      cwd: workspaceDir,
+      stdout: stdout.stream as any,
+      stderr: stderr.stream as any,
+    });
+
+    expect(code).toBe(0);
+    expect(stdout.output).toContain("Copilot");
+    expect(stdout.output).toContain("Gemini CLI");
+    expect(copilotProvider.fetch).toHaveBeenCalledOnce();
+    expect(geminiCliProvider.fetch).toHaveBeenCalledOnce();
+    expect(stderr.output).toBe("");
+  });
+
   it("uses root-level OpenCode provider ids for standalone provider availability", async () => {
     const provider = {
       id: "copilot",

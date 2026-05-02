@@ -1,3 +1,4 @@
+import type { LoadConfigMeta } from "./config.js";
 import type { QuotaToastConfig } from "./types.js";
 import type {
   QuotaProvider,
@@ -93,10 +94,11 @@ export type QuotaStatusLiveProbe = {
 function buildQuotaProviderContext(params: {
   client: QuotaProviderContext["client"];
   config: QuotaToastConfig;
+  configMeta?: Pick<LoadConfigMeta, "settingSources">;
   currentModel?: string;
   currentProviderID?: string;
 }): QuotaProviderContext {
-  const { client, config, currentModel, currentProviderID } = params;
+  const { client, config, configMeta, currentModel, currentProviderID } = params;
 
   return {
     client,
@@ -108,6 +110,8 @@ function buildQuotaProviderContext(params: {
       cursorIncludedApiUsd: config.cursorIncludedApiUsd,
       cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
       opencodeGoWindows: config.opencodeGoWindows,
+      requestTimeoutMs: config.requestTimeoutMs,
+      requestTimeoutMsConfigured: Boolean(configMeta?.settingSources.requestTimeoutMs),
       onlyCurrentModel: config.onlyCurrentModel,
       currentModel,
       currentProviderID,
@@ -145,6 +149,7 @@ export async function resolveQuotaRenderSelection(params: {
   client: QuotaProviderContext["client"];
   config: QuotaToastConfig;
   request?: QuotaRequestContext;
+  configMeta?: Pick<LoadConfigMeta, "settingSources">;
   providers?: QuotaProvider[];
 }): Promise<QuotaRenderSelection | null> {
   const { client, config, request } = params;
@@ -167,6 +172,7 @@ export async function resolveQuotaRenderSelection(params: {
   const ctx = buildQuotaProviderContext({
     client,
     config,
+    configMeta: params.configMeta,
     currentModel,
     currentProviderID,
   });
@@ -250,6 +256,7 @@ export async function collectQuotaStatusLiveProbes(params: {
   config: QuotaToastConfig;
   request?: QuotaRequestContext;
   formatStyle?: QuotaFormatStyle;
+  configMeta?: Pick<LoadConfigMeta, "settingSources">;
   providers: QuotaProvider[];
 }): Promise<QuotaStatusLiveProbe[]> {
   if (params.providers.length === 0) {
@@ -266,6 +273,7 @@ export async function collectQuotaStatusLiveProbes(params: {
   const ctx = buildQuotaProviderContext({
     client: params.client,
     config: params.config,
+    configMeta: params.configMeta,
     currentModel,
     currentProviderID,
   });
@@ -452,6 +460,7 @@ export async function collectQuotaRenderData(params: {
   request?: QuotaRequestContext;
   surfaceExplicitProviderIssues: boolean;
   formatStyle?: QuotaFormatStyle;
+  configMeta?: Pick<LoadConfigMeta, "settingSources">;
   bypassProviderCache?: boolean;
   providers?: QuotaProvider[];
 }): Promise<CollectQuotaRenderDataResult> {

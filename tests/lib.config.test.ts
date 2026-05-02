@@ -63,6 +63,23 @@ describe("loadConfig", () => {
     return { config, meta };
   }
 
+  it("defaults requestTimeoutMs to 5000 and accepts positive finite overrides", async () => {
+    const defaults = await loadSdkConfig({});
+    expect(defaults.config.requestTimeoutMs).toBe(5000);
+
+    const explicit = await loadSdkConfig({ requestTimeoutMs: 12000 });
+    expect(explicit.config.requestTimeoutMs).toBe(12000);
+    expect(explicit.meta.settingSources).toEqual({
+      requestTimeoutMs: "client.config.get",
+    });
+
+    for (const requestTimeoutMs of [0, -1, Number.POSITIVE_INFINITY, Number.NaN, "12000"]) {
+      const invalid = await loadSdkConfig({ requestTimeoutMs });
+      expect(invalid.config.requestTimeoutMs).toBe(5000);
+      expect(invalid.meta.settingSources).not.toHaveProperty("requestTimeoutMs");
+    }
+  });
+
   it("defaults alibabaCodingPlanTier to lite and accepts explicit overrides", async () => {
     const defaults = await loadSdkConfig({});
     expect(defaults.config.alibabaCodingPlanTier).toBe("lite");

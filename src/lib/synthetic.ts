@@ -145,18 +145,22 @@ function buildWeeklyTokenWindow(payload: Record<string, unknown>): SyntheticQuot
   };
 }
 
-export async function querySyntheticQuota(): Promise<SyntheticResult> {
+export async function querySyntheticQuota(options: { requestTimeoutMs?: number } = {}): Promise<SyntheticResult> {
   const resolved = await resolveSyntheticApiKey();
   if (!resolved) return null;
 
   try {
-    const resp = await fetchWithTimeout(SYNTHETIC_QUOTA_URL, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${resolved.key}`,
-        "User-Agent": "OpenCode-Quota-Toast/1.0",
+    const resp = await fetchWithTimeout(
+      SYNTHETIC_QUOTA_URL,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${resolved.key}`,
+          "User-Agent": "OpenCode-Quota-Toast/1.0",
+        },
       },
-    });
+      options.requestTimeoutMs,
+    );
 
     if (!resp.ok) {
       const text = await resp.text();

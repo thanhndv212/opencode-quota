@@ -9,6 +9,7 @@ import { createProviderAvailabilityContext } from "./helpers/provider-test-harne
 import { copilotProvider } from "../src/providers/copilot.js";
 
 vi.mock("../src/lib/copilot.js", () => ({
+  hasCopilotQuotaRuntimeAvailable: vi.fn(async () => false),
   queryCopilotQuota: vi.fn(),
 }));
 
@@ -169,6 +170,15 @@ describe("copilot provider", () => {
     await expect(
       copilotProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["openai"] })),
     ).resolves.toBe(false);
+  });
+
+  it("falls back to local Copilot quota auth when runtime provider ids are absent", async () => {
+    const { hasCopilotQuotaRuntimeAvailable } = await import("../src/lib/copilot.js");
+    (hasCopilotQuotaRuntimeAvailable as any).mockResolvedValueOnce(true);
+
+    await expect(
+      copilotProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["openai"] })),
+    ).resolves.toBe(true);
   });
 
   it("is not available when provider lookup throws", async () => {

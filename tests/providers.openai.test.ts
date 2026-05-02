@@ -15,6 +15,15 @@ vi.mock("../src/lib/openai.js", () => ({
 }));
 
 describe("openai provider", () => {
+  it("passes configured requestTimeoutMs to the query", async () => {
+    const { queryOpenAIQuota } = await import("../src/lib/openai.js");
+    (queryOpenAIQuota as any).mockResolvedValueOnce(null);
+
+    await openaiProvider.fetch({ config: { requestTimeoutMs: 12000 } } as any);
+
+    expect(queryOpenAIQuota).toHaveBeenCalledWith({ requestTimeoutMs: 12000 });
+  });
+
   it("returns attempted:false when not configured", async () => {
     const { queryOpenAIQuota } = await import("../src/lib/openai.js");
     (queryOpenAIQuota as any).mockResolvedValueOnce(null);

@@ -328,6 +328,7 @@ async function refreshAccessTokenWithCache(params: {
   email?: string;
   skewMs?: number;
   force?: boolean;
+  timeoutMs?: number;
   credentials: GoogleAntigravityConfiguredCredentials;
 }): Promise<{ accessToken: string } | { error: string }> {
   const skewMs = params.skewMs ?? 2 * 60_000;
@@ -346,6 +347,7 @@ async function refreshAccessTokenWithCache(params: {
     refreshToken: params.refreshToken,
     clientId: params.credentials.clientId,
     clientSecret: params.credentials.clientSecret,
+    timeoutMs: params.timeoutMs,
   });
   if ("error" in refreshed) return refreshed;
 
@@ -506,6 +508,7 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
   account: AntigravityAccount;
   modelIds: GoogleModelId[];
   credentials: GoogleAntigravityConfiguredCredentials;
+  timeoutMs?: number;
 }): Promise<{
   success: boolean;
   models?: GoogleModelQuota[];
@@ -525,6 +528,7 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
       projectId,
       email,
       credentials: params.credentials,
+      timeoutMs: params.timeoutMs,
     });
 
     if ("error" in tokenResult)
@@ -532,7 +536,7 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
 
     let data: GoogleQuotaResponse;
     try {
-      data = await fetchGoogleQuota(tokenResult.accessToken, projectId);
+      data = await fetchGoogleQuota(tokenResult.accessToken, projectId, params.timeoutMs);
     } catch (err) {
       // One auth retry: refresh token then retry quota call.
       if (err instanceof Error && err.message.includes("auth error")) {
@@ -540,6 +544,7 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
           refreshToken: params.account.refreshToken,
           clientId: params.credentials.clientId,
           clientSecret: params.credentials.clientSecret,
+          timeoutMs: params.timeoutMs,
         });
         if ("error" in retryToken) {
           return { success: false, error: retryToken.error, accountEmail: email };
@@ -553,7 +558,7 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
             email,
           },
         });
-        data = await fetchGoogleQuota(retryToken.accessToken, projectId);
+        data = await fetchGoogleQuota(retryToken.accessToken, projectId, params.timeoutMs);
       } else {
         throw err;
       }
@@ -586,7 +591,10 @@ async function fetchAccountQuotaWithAntigravityRefresh(params: {
  * @param modelIds - Model IDs to fetch quota for
  * @returns Quota result with all models and any errors, or null if not configured
  */
-export async function queryGoogleQuota(modelIds: GoogleModelId[]): Promise<GoogleResult> {
+export async function queryGoogleQuota(
+  modelIds: GoogleModelId[],
+  options: { requestTimeoutMs?: number } = {},
+): Promise<GoogleResult> {
   const accounts = await readAntigravityAccounts();
   if (!accounts || accounts.length === 0) {
     return null;
@@ -605,7 +613,12 @@ export async function queryGoogleQuota(modelIds: GoogleModelId[]): Promise<Googl
     items: accounts,
     concurrency: GOOGLE_ACCOUNTS_CONCURRENCY,
     fn: async (account) =>
-      fetchAccountQuotaWithAntigravityRefresh({ account, modelIds, credentials }),
+      fetchAccountQuotaWithAntigravityRefresh({
+        account,
+        modelIds,
+        credentials,
+        timeoutMs: options.requestTimeoutMs,
+      }),
   });
 
   // Collect all successful models and errors

@@ -645,10 +645,15 @@ async function fetchGitHubRestJsonOnce<T>(
   url: string,
   token: string,
   scheme: GitHubRestAuthScheme,
+  requestTimeoutMs?: number,
 ): Promise<{ ok: true; status: number; data: T } | { ok: false; status: number; message: string }> {
-  const response = await fetchWithTimeout(url, {
-    headers: buildGitHubRestHeaders(token, scheme),
-  });
+  const response = await fetchWithTimeout(
+    url,
+    {
+      headers: buildGitHubRestHeaders(token, scheme),
+    },
+    requestTimeoutMs,
+  );
 
   if (response.ok) {
     return { ok: true, status: response.status, data: (await response.json()) as T };
@@ -661,12 +666,17 @@ async function fetchGitHubRestJsonOnce<T>(
   };
 }
 
-async function resolveGitHubUsername(token: string): Promise<string> {
+async function resolveGitHubUsername(token: string, requestTimeoutMs?: number): Promise<string> {
   const url = `${GITHUB_API_BASE_URL}/user`;
   let unauthorized: { status: number; message: string } | null = null;
 
   for (const scheme of preferredSchemesForToken(token)) {
-    const result = await fetchGitHubRestJsonOnce<GitHubViewerResponse>(url, token, scheme);
+    const result = await fetchGitHubRestJsonOnce<GitHubViewerResponse>(
+      url,
+      token,
+      scheme,
+      requestTimeoutMs,
+    );
 
     if (result.ok) {
       const login = result.data.login?.trim();
@@ -715,12 +725,13 @@ function getBillingRequestUrl(target: CopilotRequestTarget): string {
 async function fetchPremiumRequestUsage(params: {
   token: string;
   target: CopilotBillingTarget;
+  requestTimeoutMs?: number;
 }): Promise<{ response: BillingUsageResponse; billingPeriod?: BillingPeriodQuery }> {
   const requestTarget: CopilotRequestTarget =
     params.target.scope === "user"
       ? {
           scope: "user",
-          username: params.target.username ?? (await resolveGitHubUsername(params.token)),
+          username: params.target.username ?? (await resolveGitHubUsername(params.token, params.requestTimeoutMs)),
         }
       : params.target;
 
@@ -729,7 +740,12 @@ async function fetchPremiumRequestUsage(params: {
   let unauthorized: { status: number; message: string } | null = null;
 
   for (const scheme of preferredSchemesForToken(params.token)) {
-    const result = await fetchGitHubRestJsonOnce<BillingUsageResponse>(url, params.token, scheme);
+    const result = await fetchGitHubRestJsonOnce<BillingUsageResponse>(
+      url,
+      params.token,
+      scheme,
+      params.requestTimeoutMs,
+    );
 
     if (result.ok) {
       return {
@@ -755,8 +771,13 @@ async function fetchPremiumRequestUsage(params: {
   throw new Error("Unable to fetch Copilot premium request usage");
 }
 
-async function fetchCopilotInternalUser(token: string): Promise<unknown> {
-  const result = await fetchGitHubRestJsonOnce<unknown>(COPILOT_INTERNAL_USER_URL, token, "bearer");
+async function fetchCopilotInternalUser(token: string, requestTimeoutMs?: number): Promise<unknown> {
+  const result = await fetchGitHubRestJsonOnce<unknown>(
+    COPILOT_INTERNAL_USER_URL,
+    token,
+    "bearer",
+    requestTimeoutMs,
+  );
   if (result.ok) {
     return result.data;
   }
@@ -1054,7 +1075,7 @@ function toQuotaError(message: string): QuotaError {
  *
  * PAT configuration wins over OpenCode OAuth auth when both are present.
  */
-export async function queryCopilotQuota(): Promise<CopilotResult> {
+export async function queryCopilotQuota(options: { requestTimeoutMs?: number } = {}): Promise<CopilotResult> {
   const pat = readQuotaConfigWithMeta();
 
   if (pat.state === "invalid") {
@@ -1081,6 +1102,7 @@ export async function queryCopilotQuota(): Promise<CopilotResult> {
       const { response, billingPeriod } = await fetchPremiumRequestUsage({
         token: pat.config.token,
         target: resolvedTarget.target,
+        requestTimeoutMs: options.requestTimeoutMs,
       });
 
       if (resolvedTarget.target.scope === "organization") {
@@ -1122,11 +1144,16 @@ export async function queryCopilotQuota(): Promise<CopilotResult> {
   }
 
   try {
-    const response = await fetchCopilotInternalUser(accessToken);
+    const response = await fetchCopilotInternalUser(accessToken, options.requestTimeoutMs);
     return toUserQuotaResultFromCopilotInternal(response);
   } catch (error) {
     return toQuotaError(error instanceof Error ? error.message : String(error));
   }
+}
+
+export async function hasCopilotQuotaRuntimeAvailable(): Promise<boolean> {
+  const diagnostics = getCopilotQuotaAuthDiagnostics(await readAuthFile());
+  return diagnostics.billingApiAccessLikely;
 }
 
 export function formatCopilotQuota(result: CopilotResult): string | null {

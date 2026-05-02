@@ -35,7 +35,11 @@ export const googleGeminiCliProvider: QuotaProvider = {
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryGeminiCliQuota(ctx.client);
+    const result = await queryGeminiCliQuota(ctx.client, {
+      requestTimeoutMs: ctx.config?.requestTimeoutMsConfigured
+        ? ctx.config.requestTimeoutMs
+        : undefined,
+    });
 
     if (!result) {
       return notAttemptedResult();

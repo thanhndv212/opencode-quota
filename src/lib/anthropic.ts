@@ -76,6 +76,7 @@ export interface AnthropicDiagnostics {
 
 export interface AnthropicProbeOptions {
   binaryPath?: string;
+  requestTimeoutMs?: number;
 }
 
 type ClaudeCommandResult = {
@@ -177,6 +178,15 @@ function quoteWindowsCmdArg(value: string): string {
   return `"${escaped}"`;
 }
 
+function shouldBridgeClaudeCommandThroughWindowsShell(binaryPath: string): boolean {
+  const normalized = binaryPath.trim().toLowerCase();
+  if (!/[\\/]/u.test(normalized)) {
+    return true;
+  }
+
+  return /\.(?:cmd|bat)$/u.test(normalized);
+}
+
 export function buildClaudeCommandInvocation(
   binaryPath: string,
   args: string[],
@@ -185,7 +195,10 @@ export function buildClaudeCommandInvocation(
   const resolvedBinaryPath = resolveAnthropicBinaryPath(binaryPath);
   const display = formatCommandDisplay([resolvedBinaryPath, ...args]);
 
-  if ((runtime.platform ?? process.platform) === "win32") {
+  if (
+    (runtime.platform ?? process.platform) === "win32" &&
+    shouldBridgeClaudeCommandThroughWindowsShell(resolvedBinaryPath)
+  ) {
     return {
       file: runtime.comspec?.trim() || process.env["ComSpec"]?.trim() || "cmd.exe",
       args: ["/d", "/s", "/c", [resolvedBinaryPath, ...args].map(quoteWindowsCmdArg).join(" ")],
@@ -569,16 +582,21 @@ async function readClaudeCredentialsAccessToken(): Promise<ClaudeCredentialsAcce
 
 async function queryAnthropicQuotaFromOAuthAccessToken(
   accessToken: string,
+  requestTimeoutMs?: number,
 ): Promise<AnthropicFallbackQuota> {
   let response: Response;
 
   try {
-    response = await fetchWithTimeout(ANTHROPIC_USAGE_URL, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "anthropic-beta": ANTHROPIC_BETA_HEADER,
+    response = await fetchWithTimeout(
+      ANTHROPIC_USAGE_URL,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "anthropic-beta": ANTHROPIC_BETA_HEADER,
+        },
       },
-    });
+      requestTimeoutMs,
+    );
   } catch (error) {
     return {
       state: "unavailable",
@@ -1023,7 +1041,10 @@ export async function getAnthropicDiagnostics(
       return diagnostics;
     }
 
-    const fallbackQuota = await queryAnthropicQuotaFromOAuthAccessToken(credentials.accessToken);
+    const fallbackQuota = await queryAnthropicQuotaFromOAuthAccessToken(
+      credentials.accessToken,
+      options.requestTimeoutMs,
+    );
     if (fallbackQuota.state !== "success") {
       const diagnostics: AnthropicDiagnostics = {
         installed: localDiagnostics.installed,

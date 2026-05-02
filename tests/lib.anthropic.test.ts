@@ -178,6 +178,76 @@ describe("Claude CLI diagnostics", () => {
     });
   });
 
+  it("keeps Windows PATH-based Claude commands behind cmd.exe", () => {
+    const invocation = buildClaudeCommandInvocation("claude.exe", ["--version"], {
+      platform: "win32",
+      comspec: "C:\\Windows\\System32\\cmd.exe",
+    });
+
+    expect(invocation).toEqual({
+      file: "C:\\Windows\\System32\\cmd.exe",
+      args: ["/d", "/s", "/c", "\"claude.exe\" \"--version\""],
+      display: "claude.exe --version",
+    });
+  });
+
+  it("executes configured Windows Claude .exe paths directly", () => {
+    const invocation = buildClaudeCommandInvocation(
+      "C:/Users/alice/.local/bin/claude.exe",
+      ["auth", "status", "--json"],
+      { platform: "win32", comspec: "C:\\Windows\\System32\\cmd.exe" },
+    );
+
+    expect(invocation).toEqual({
+      file: "C:/Users/alice/.local/bin/claude.exe",
+      args: ["auth", "status", "--json"],
+      display: "C:/Users/alice/.local/bin/claude.exe auth status --json",
+    });
+  });
+
+  it("probes configured Windows Claude .exe paths without cmd wrapping", async () => {
+    setProcessPlatform("win32");
+    mockExecSequence([
+      { stdout: "2.1.123 (Claude Code)\n" },
+      {
+        stdout: JSON.stringify({
+          authenticated: true,
+          quota: {
+            five_hour: { used_percentage: 10 },
+            seven_day: { used_percentage: 20 },
+          },
+        }),
+      },
+    ]);
+
+    const diagnostics = await getAnthropicDiagnostics({
+      binaryPath: " C:/Users/alice/.local/bin/claude.exe ",
+    });
+
+    expect(diagnostics.installed).toBe(true);
+    expect(diagnostics.version).toBe("2.1.123");
+    expect(diagnostics.authStatus).toBe("authenticated");
+    expect(diagnostics.quotaSupported).toBe(true);
+    expect(diagnostics.checkedCommands).toEqual([
+      "C:/Users/alice/.local/bin/claude.exe --version",
+      "C:/Users/alice/.local/bin/claude.exe auth status --json",
+    ]);
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      1,
+      "C:/Users/alice/.local/bin/claude.exe",
+      ["--version"],
+      expect.any(Object),
+      expect.any(Function),
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      "C:/Users/alice/.local/bin/claude.exe",
+      ["auth", "status", "--json"],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
   it("reports missing Claude CLI as unavailable without quota data", async () => {
     mockExecSequence([
       {
@@ -332,12 +402,16 @@ describe("Claude CLI diagnostics", () => {
     expect(diagnostics.quota?.five_hour.resetTimeIso).toBe("2026-03-25T18:00:00.000Z");
     expect(diagnostics.quota?.seven_day.percentRemaining).toBe(85);
     expect(diagnostics.quota?.seven_day.resetTimeIso).toBe("2026-04-01T00:00:00.000Z");
-    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(ANTHROPIC_USAGE_URL, {
-      headers: {
-        Authorization: "Bearer oauth-access-token",
-        "anthropic-beta": "oauth-2025-04-20",
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      ANTHROPIC_USAGE_URL,
+      {
+        headers: {
+          Authorization: "Bearer oauth-access-token",
+          "anthropic-beta": "oauth-2025-04-20",
+        },
       },
-    });
+      undefined,
+    );
 
     const quota = await queryAnthropicQuota();
     expect(quota?.success).toBe(true);
@@ -388,12 +462,16 @@ describe("Claude CLI diagnostics", () => {
     expect(diagnostics.quotaSource).toBe("claude-credentials-oauth-api");
     expect(diagnostics.quota?.five_hour.percentRemaining).toBe(75);
     expect(diagnostics.quota?.seven_day.percentRemaining).toBe(60);
-    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(ANTHROPIC_USAGE_URL, {
-      headers: {
-        Authorization: "Bearer oauth-access-token-from-keychain",
-        "anthropic-beta": "oauth-2025-04-20",
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      ANTHROPIC_USAGE_URL,
+      {
+        headers: {
+          Authorization: "Bearer oauth-access-token-from-keychain",
+          "anthropic-beta": "oauth-2025-04-20",
+        },
       },
-    });
+      undefined,
+    );
     expect(readFileMock).not.toHaveBeenCalled();
     expect(execFileMock).toHaveBeenCalledTimes(3);
   });
@@ -433,12 +511,16 @@ describe("Claude CLI diagnostics", () => {
     expect(diagnostics.quotaSupported).toBe(true);
     expect(diagnostics.quota?.five_hour.percentRemaining).toBe(95);
     expect(diagnostics.quota?.seven_day.percentRemaining).toBe(90);
-    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(ANTHROPIC_USAGE_URL, {
-      headers: {
-        Authorization: "Bearer oauth-access-token-from-file",
-        "anthropic-beta": "oauth-2025-04-20",
+    expect(fetchWithTimeoutMock).toHaveBeenCalledWith(
+      ANTHROPIC_USAGE_URL,
+      {
+        headers: {
+          Authorization: "Bearer oauth-access-token-from-file",
+          "anthropic-beta": "oauth-2025-04-20",
+        },
       },
-    });
+      undefined,
+    );
     expect(readFileMock).toHaveBeenCalledTimes(1);
     expect(execFileMock).toHaveBeenCalledTimes(3);
   });

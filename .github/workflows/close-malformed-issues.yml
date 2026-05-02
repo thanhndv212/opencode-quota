@@ -1,0 +1,119 @@
+name: Close malformed issues
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  issues: write
+
+concurrency:
+  group: close-malformed-issues-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  close-malformed:
+    if: github.event.issue.state == 'open'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate issue template format
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+            const labels = (issue.labels || []).map((label) => label.name);
+            const title = issue.title || "";
+
+            const hasBugLabel = labels.includes("bug");
+            const hasFeatureLabel = labels.includes("enhancement");
+            const bugTitle = /^\[bug\]:\s+/i.test(title);
+            const featureTitle = /^\[feature\]:\s+/i.test(title);
+
+            const requiredHeadingsByType = {
+              bug: [
+                "### Pre-flight checks",
+                "### OpenCode version tested",
+                "### opencode-quota version tested",
+                "### Bug summary",
+                "### Steps to reproduce",
+                "### Expected behavior",
+                "### Actual behavior",
+                "### Relevant logs/output"
+              ],
+              feature: [
+                "### Pre-flight checks",
+                "### OpenCode version reviewed",
+                "### Problem statement",
+                "### Proposed change",
+                "### Acceptance criteria"
+              ]
+            };
+
+            const hasHeading = (heading) => {
+              const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              return new RegExp(`^${escaped}$`, "m").test(body);
+            };
+
+            const missingByType = {
+              bug: requiredHeadingsByType.bug.filter((heading) => !hasHeading(heading)),
+              feature: requiredHeadingsByType.feature.filter((heading) => !hasHeading(heading)),
+            };
+
+            let templateType = null;
+            if (hasBugLabel || bugTitle) {
+              templateType = "bug";
+            } else if (hasFeatureLabel || featureTitle) {
+              templateType = "feature";
+            } else if (missingByType.bug.length === 0) {
+              templateType = "bug";
+            } else if (missingByType.feature.length === 0) {
+              templateType = "feature";
+            }
+
+            const missing = templateType
+              ? missingByType[templateType]
+              : ["A recognized Bug report or Feature request issue template"];
+
+            if (missing.length === 0) {
+              core.info("Issue format looks valid.");
+              return;
+            }
+
+            const missingList = missing.map((h) => `- ${h}`).join("\n");
+            const guidance =
+              templateType === "bug"
+                ? "Please re-open using the **Bug report** issue template."
+                : templateType === "feature"
+                  ? "Please re-open using the **Feature request** issue template."
+                  : "Please re-open using the **Bug report** or **Feature request** issue template.";
+
+            const commentBody = [
+              "Thanks for opening this issue.",
+              "",
+              "This issue was automatically closed because it does not match the expected issue template format.",
+              "",
+              "Missing required template sections:",
+              missingList,
+              "",
+              guidance,
+              "",
+              "You can open a new issue here: https://github.com/slkiser/opencode-quota/issues/new/choose"
+            ].join("\n");
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: commentBody
+            });
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: "closed"
+            });
+
+            core.info(`Closed malformed ${templateType ?? "freeform"} issue #${issue.number}.`);

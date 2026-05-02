@@ -51,7 +51,7 @@ export const kimiCodeProvider: QuotaProvider = {
       return attemptedErrorResult("Kimi Code", auth.error);
     }
 
-    const result = await queryKimiQuota();
+    const result = await queryKimiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

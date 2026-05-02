@@ -65,7 +65,7 @@ export const syntheticProvider: QuotaProvider = {
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await querySyntheticQuota();
+    const result = await querySyntheticQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     if (!result) {
       return notAttemptedResult();

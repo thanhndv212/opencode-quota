@@ -46,6 +46,7 @@ export const anthropicProvider: QuotaProvider = {
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
     const result = await queryAnthropicQuota({
       binaryPath: ctx.config?.anthropicBinaryPath,
+      requestTimeoutMs: ctx.config?.requestTimeoutMs,
     });
 
     if (!result) {
