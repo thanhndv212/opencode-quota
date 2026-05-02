@@ -132,7 +132,7 @@ If you want the `Quota` sidebar panel, you need the plugin in both OpenCode conf
 
 </details>
 
-### What it adds
+### What opencode-quota adds
 
 - TUI sidebar panel with quota rows
 - Popup quota toasts after assistant responses
