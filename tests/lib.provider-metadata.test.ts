@@ -71,10 +71,11 @@ describe("provider-metadata", () => {
       },
       {
         id: "crof",
-        autoSetup: "usually",
-        authentication: "opencode_auth_api_key",
+        autoSetup: "manual_env_config",
+        authentication: "external_api_key",
         authFallbacks: ["env_api_key", "global_opencode_config"],
         quota: "remote_api",
+        notes: "Requires CROF_API_KEY or trusted user/global config; not available through OpenCode /connect",
       },
       {
         id: "google-antigravity",
@@ -154,7 +155,7 @@ describe("provider-metadata", () => {
     expect(QUOTA_PROVIDER_RUNTIME_IDS.cursor).toEqual(["cursor", "cursor-acp"]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS.synthetic).toEqual(["synthetic"]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS.chutes).toEqual(["chutes", "chutes-ai"]);
-    expect(QUOTA_PROVIDER_RUNTIME_IDS.crof).toEqual(["crof", "crof-ai", "nahcrof"]);
+    expect(QUOTA_PROVIDER_RUNTIME_IDS.crof).toEqual(["crof"]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS["google-antigravity"]).toEqual([
       "google-antigravity",
       "google",
@@ -203,8 +204,6 @@ describe("provider-metadata", () => {
       "google",
     ]);
     expect(getQuotaProviderRuntimeIds("zai")).toEqual(["zai", "glm", "zai-coding-plan"]);
-    expect(getQuotaProviderRuntimeIds("crof-ai")).toEqual(["crof", "crof-ai", "nahcrof"]);
-    expect(getQuotaProviderRuntimeIds("nahcrof")).toEqual(["crof", "crof-ai", "nahcrof"]);
     expect(getQuotaProviderRuntimeIds("minimax")).toEqual(["minimax-coding-plan", "minimax"]);
     expect(getQuotaProviderRuntimeIds("kimi")).toEqual(["kimi-for-coding", "kimi", "kimi-code"]);
     expect(getQuotaProviderRuntimeIds("not-a-provider")).toEqual([]);
@@ -251,8 +250,6 @@ describe("provider-metadata", () => {
     expect(getQuotaProviderDisplayLabel("zai")).toBe("Z.ai");
     expect(getQuotaProviderDisplayLabel("nanogpt")).toBe("NanoGPT");
     expect(getQuotaProviderDisplayLabel("nano-gpt")).toBe("NanoGPT");
-    expect(getQuotaProviderDisplayLabel("crof-ai")).toBe("Crof");
-    expect(getQuotaProviderDisplayLabel("nahcrof")).toBe("Crof");
     expect(getQuotaProviderDisplayLabel("minimax")).toBe("MiniMax Coding Plan");
     expect(getQuotaProviderDisplayLabel("kimi-code")).toBe("Kimi Code");
     expect(getQuotaProviderDisplayLabel("kimi")).toBe("Kimi Code");

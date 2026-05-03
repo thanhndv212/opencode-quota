@@ -4,9 +4,6 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { queryCrofQuota } from "../src/lib/crof.js";
 
-vi.mock("../src/lib/opencode-auth.js", () => ({
-  readAuthFile: vi.fn(),
-}));
 
 describe("queryCrofQuota", () => {
   const originalEnv = process.env;
@@ -28,9 +25,6 @@ describe("queryCrofQuota", () => {
   });
 
   it("returns null when not configured", async () => {
-    const { readAuthFile } = await import("../src/lib/opencode-auth.js");
-    (readAuthFile as any).mockResolvedValueOnce({});
-
     delete process.env.CROF_API_KEY;
 
     await expect(queryCrofQuota()).resolves.toBeNull();
@@ -116,13 +110,13 @@ describe("queryCrofQuota", () => {
     expect(out).toBeNull();
   });
 
-  it("reads crof api keys from trusted global config aliases", async () => {
+  it("reads crof api keys from trusted global config", async () => {
     mkdirSync(join(tempDir, "opencode"), { recursive: true });
     writeFileSync(
       join(tempDir, "opencode", "opencode.json"),
       JSON.stringify({
         provider: {
-          "crof-ai": {
+          crof: {
             options: {
               apiKey: "global-config-key",
             },
@@ -170,11 +164,6 @@ describe("queryCrofQuota", () => {
               apiKey: "{env:GITHUB_TOKEN}",
             },
           },
-          nahcrof: {
-            options: {
-              apiKey: "{env:CROF_API_KEY}",
-            },
-          },
         },
       }),
       "utf-8",
@@ -184,37 +173,4 @@ describe("queryCrofQuota", () => {
     expect(out).toBeNull();
   });
 
-  it("falls back to auth.json provider aliases", async () => {
-    const { readAuthFile } = await import("../src/lib/opencode-auth.js");
-    (readAuthFile as any).mockResolvedValueOnce({
-      nahcrof: {
-        type: "api",
-        key: "auth-key",
-      },
-    });
-
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            credits: 0,
-            requests_plan: 0,
-            usable_requests: 0,
-          }),
-          { status: 200 },
-        ),
-    ) as any;
-    vi.stubGlobal("fetch", fetchMock);
-
-    const out = await queryCrofQuota();
-    expect(out && out.success ? out.percentRemaining : -1).toBe(0);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://crof.ai/usage_api/",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer auth-key",
-        }),
-      }),
-    );
-  });
 });

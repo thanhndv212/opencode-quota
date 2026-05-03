@@ -69,8 +69,6 @@ describe("crof provider", () => {
 
   it("matches Crof runtime model ids", () => {
     expect(crofProvider.matchesCurrentModel?.("crof/model")).toBe(true);
-    expect(crofProvider.matchesCurrentModel?.("crof-ai/model")).toBe(true);
-    expect(crofProvider.matchesCurrentModel?.("nahcrof/model")).toBe(true);
     expect(crofProvider.matchesCurrentModel?.("openai/gpt-5")).toBe(false);
   });
 

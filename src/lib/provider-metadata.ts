@@ -16,7 +16,7 @@ export type CanonicalQuotaProviderId =
   | "kimi-for-coding"
   | "opencode-go";
 
-export type QuotaProviderAutoSetup = "yes" | "usually" | "needs_quick_setup";
+export type QuotaProviderAutoSetup = "yes" | "usually" | "manual_env_config" | "needs_quick_setup";
 
 export type QuotaProviderAuthentication =
   | "opencode_auth_oauth_token"
@@ -24,6 +24,7 @@ export type QuotaProviderAuthentication =
   | "companion_auth_oauth_token"
   | "local_cli_auth"
   | "github_oauth_or_pat"
+  | "external_api_key"
   | "state_only";
 
 export type QuotaProviderAuthFallback = "env_api_key" | "global_opencode_config";
@@ -78,8 +79,6 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   qwen: "qwen-code",
   alibaba: "alibaba-coding-plan",
   "nano-gpt": "nanogpt",
-  "crof-ai": "crof",
-  nahcrof: "crof",
   minimax: "minimax-coding-plan",
   kimi: "kimi-for-coding",
   "kimi-for-code": "kimi-for-coding",
@@ -100,7 +99,7 @@ export const QUOTA_PROVIDER_RUNTIME_IDS: QuotaProviderRuntimeIds = {
   "alibaba-coding-plan": ["alibaba-coding-plan"],
   synthetic: ["synthetic"],
   chutes: ["chutes", "chutes-ai"],
-  crof: ["crof", "crof-ai", "nahcrof"],
+  crof: ["crof"],
   "google-antigravity": ["google-antigravity", "google", "antigravity"],
   "google-gemini-cli": [
     "google-gemini-cli",
@@ -181,10 +180,11 @@ export const QUOTA_PROVIDER_SHAPES: readonly QuotaProviderShape[] = [
   },
   {
     id: "crof",
-    autoSetup: "usually",
-    authentication: "opencode_auth_api_key",
+    autoSetup: "manual_env_config",
+    authentication: "external_api_key",
     authFallbacks: ["env_api_key", "global_opencode_config"],
     quota: "remote_api",
+    notes: "Requires CROF_API_KEY or trusted user/global config; not available through OpenCode /connect",
   },
   {
     id: "google-antigravity",

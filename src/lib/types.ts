@@ -308,18 +308,6 @@ export interface AuthData {
     type: string;
     key?: string;
   };
-  crof?: {
-    type: string;
-    key?: string;
-  };
-  "crof-ai"?: {
-    type: string;
-    key?: string;
-  };
-  nahcrof?: {
-    type: string;
-    key?: string;
-  };
   nanogpt?: NanoGptAuthData;
   "nano-gpt"?: NanoGptAuthData;
   cursor?: CursorOAuthAuthData;

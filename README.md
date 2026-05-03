@@ -169,7 +169,7 @@ If you want the `Quota` sidebar panel, you need the plugin in both OpenCode conf
 | MiniMax Coding Plan | Automatic                                            | Existing OpenCode auth, global config, or env                  | Remote API               |
 | Kimi Code           | Automatic                                            | Existing OpenCode auth, global config, or env                  | Remote API               |
 | Chutes AI           | Usually automatic                                    | Existing OpenCode auth, global config, or env                  | Remote API               |
-| Crof.ai             | Usually automatic                                    | Existing OpenCode auth, global config, or env                  | Remote API               |
+| Crof.ai             | Manual env/config                                    | `CROF_API_KEY` or trusted user/global config                    | Remote API               |
 | Synthetic           | Automatic                                            | Existing OpenCode auth, global config, or env                  | Remote API               |
 | Google Antigravity  | [Needs quick setup](#google-antigravity-quick-setup) | `["opencode-antigravity-auth", "@slkiser/opencode-quota"]`     | Remote API               |
 | Gemini CLI          | [Needs quick setup](#gemini-cli-quick-setup)         | `["opencode-gemini-auth", "@slkiser/opencode-quota"]`          | Remote API               |
@@ -497,14 +497,14 @@ Run `/quota_status` and check the Alibaba auth, resolved tier, state-file path, 
 <details>
 <summary><strong>MiniMax, Kimi, Chutes AI, Crof.ai, Synthetic, Z.ai, and NanoGPT</strong></summary>
 
-These providers use trusted env vars, trusted user/global OpenCode config, or native OpenCode auth. Run `/quota_status` and check the provider-specific API-key diagnostics.
+These providers use trusted env vars, trusted user/global OpenCode config, or native OpenCode auth. Run `/quota_status` and check the provider-specific API-key diagnostics (Crof.ai is env/config only).
 
 | Provider            | Useful checks                                                                                         |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |
 | MiniMax Coding Plan | Use `MINIMAX_CODING_PLAN_API_KEY` or `MINIMAX_API_KEY`; repo-local provider secrets are ignored.      |
 | Kimi Code           | Use `KIMI_API_KEY` or `KIMI_CODE_API_KEY`; repo-local provider secrets are ignored.                   |
 | Chutes AI           | Use `CHUTES_API_KEY` or trusted user/global config.                                                   |
-| Crof.ai             | Use `CROF_API_KEY`, trusted user/global config, or OpenCode auth.                                     |
+| Crof.ai             | Use `CROF_API_KEY` or trusted user/global config.                                                     |
 | Synthetic           | Use `SYNTHETIC_API_KEY`, trusted user/global config, or OpenCode auth.                                |
 | Z.ai Coding Plan    | Use `ZAI_API_KEY` or `ZAI_CODING_PLAN_API_KEY`; malformed fallback auth is surfaced as an auth error. |
 | NanoGPT             | Use `NANOGPT_API_KEY`, `NANO_GPT_API_KEY`, trusted user/global config, or OpenCode auth.              |
