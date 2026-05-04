@@ -28,14 +28,14 @@ npx @slkiser/opencode-quota init
 > [!IMPORTANT]
 > OpenCode `>= 1.4.3` and Node.js `>= 18` are required.
 
-The installer is append-only: it adds the plugin, asks a few display/provider questions, and leaves existing values alone.
+The installer is append-only: it adds the plugin, asks a few display/provider questions, and leaves existing values alone. For Quota UI, choose one or more surfaces: Toast, Sidebar panel, Compact status line, or None.
 
 After install:
 
 1. Restart OpenCode.
 2. Run `/quota`.
 3. If something looks wrong, run `/quota_status`.
-4. If you enabled the sidebar, open the session sidebar and look for the `Quota` panel.
+4. If you selected Sidebar panel, open the session sidebar and look for `Quota`. If you selected Compact status, look for the home-bottom quota line.
 
 Terminal-only check:
 
@@ -53,7 +53,7 @@ opencode-quota show --provider copilot
 
 ### Manual setup
 
-Add the server plugin to `opencode.json` or `opencode.jsonc`:
+Add the server plugin to `opencode.json` or `opencode.jsonc`. This enables slash commands, terminal checks, provider probing, and popup toasts when configured:
 
 ```jsonc
 {
@@ -62,7 +62,7 @@ Add the server plugin to `opencode.json` or `opencode.jsonc`:
 }
 ```
 
-If you also want the sidebar, add the same package to the `tui.json` or `tui.jsonc` file that OpenCode loads:
+For TUI surfaces, add the same package to `tui.json` or `tui.jsonc`:
 
 ```jsonc
 {
@@ -70,6 +70,13 @@ If you also want the sidebar, add the same package to the `tui.json` or `tui.jso
   "plugin": ["@slkiser/opencode-quota"],
 }
 ```
+
+Human model:
+
+- **Sidebar panel** is the full `Quota` panel in OpenCode's session sidebar.
+- **Compact status** is the short quota line shown in a TUI status location.
+
+They are separate choices in the installer and in the docs below. Today, both are delivered by the same TUI plugin entry, so either TUI choice needs the package in `tui.json`.
 
 Quota settings go in `opencode-quota/quota-toast.json` next to the OpenCode config file you chose during install. Existing `experimental.quotaToast` settings still work when no sidecar file exists. Quota settings do not live in `tui.json`.
 
@@ -108,29 +115,32 @@ Quota settings go in `opencode-quota/quota-toast.json` next to the OpenCode conf
 | `layout.tinyAt`   | `32`    | Toast tiny-layout breakpoint. Ignored by the TUI sidebar.                       |
 | `debug`           | `false` | Append toast debug context when troubleshooting.                                |
 
+#### TUI sidebar panel
+
+The Sidebar panel is the full `Quota` panel in OpenCode's session sidebar. To use it, install the package in both config surfaces:
+
+| File                               | What goes there                         | Why it is needed                |
+| ---------------------------------- | --------------------------------------- | ------------------------------- |
+| `opencode.json` / `opencode.jsonc` | `plugin: ["@slkiser/opencode-quota"]` | Server plugin and slash commands |
+| `tui.json` / `tui.jsonc`           | `plugin: ["@slkiser/opencode-quota"]` | TUI sidebar registration        |
+
+Sidebar display uses the shared quota settings above, especially `formatStyle`, `percentDisplayMode`, and `showSessionTokens`. Quota settings still live in `opencode-quota/quota-toast.json`, not `tui.json`.
+
 #### TUI compact status settings
 
-Compact TUI status surfaces are opt-in. The `Quota` sidebar remains registered independently; when `tuiCompactStatus.enabled` is true, the TUI plugin can also register compact `home_bottom` and `session_prompt` status lines. By default, compact status is suppressed when OpenCode exposes native provider-quota support.
+Compact status is the short quota line for TUI status locations. It is configured separately from the Sidebar panel so you can reason about each surface independently.
 
-The `sessionPrompt` surface wraps OpenCode's core prompt slot, so keep it disabled if you rely on other prompt-slot integrations and see interop issues.
+If Compact status is not selected, the installer leaves existing compact-status config alone. Session-prompt wrapping is available only by manual config because it is more fragile than the home-bottom line.
 
 | Option                                           | Default | Meaning                                                     |
 | ------------------------------------------------ | ------- | ----------------------------------------------------------- |
 | `tuiCompactStatus.enabled`                       | `false` | Opt in to compact TUI status surfaces.                      |
-| `tuiCompactStatus.homeBottom`                    | `true`  | Register the TUI home-bottom compact status when compact status is enabled. |
-| `tuiCompactStatus.sessionPrompt`                 | `true`  | Wrap the TUI session prompt with a compact status line when compact status is enabled. |
-| `tuiCompactStatus.suppressWhenNativeProviderQuota` | `true`  | Suppress compact status when OpenCode exposes native provider-quota support. |
+| `tuiCompactStatus.homeBottom`                    | `true`  | Show the compact quota line at the home bottom location.     |
+| `tuiCompactStatus.sessionPrompt`                 | `true`  | Manually opt in to wrapping the TUI session prompt.          |
+| `tuiCompactStatus.suppressWhenNativeProviderQuota` | `true`  | Hide compact status when OpenCode exposes native provider-quota support. |
 | `tuiCompactStatus.maxWidth`                      | `96`    | Maximum compact status text width.                          |
 
-#### TUI sidebar setup
-
-If you want the `Quota` sidebar panel, you need the plugin in both OpenCode config surfaces:
-
-| File                               | What goes there                       | Needed for sidebar?             |
-| ---------------------------------- | ------------------------------------- | ------------------------------- |
-| `tui.json` / `tui.jsonc`           | `plugin: ["@slkiser/opencode-quota"]` | Yes                             |
-| `opencode.json` / `opencode.jsonc` | Server plugin entry                   | Yes                             |
-| `opencode-quota/quota-toast.json`  | Quota settings                        | No, but controls quota behavior |
+Compact status also needs the package in `tui.json`, because the TUI plugin owns all TUI surfaces. With the current TUI integration, installing that plugin also makes the Sidebar panel available.
 
 #### Provider-specific settings
 
@@ -148,12 +158,10 @@ If you want the `Quota` sidebar panel, you need the plugin in both OpenCode conf
 
 ### What opencode-quota adds
 
-- TUI sidebar panel with quota rows
-- Popup quota toasts after assistant responses
-- Manual `/quota`, `/quota_status`, and `/tokens_*` commands
-- Terminal `opencode-quota show` command for a quota-only quick glance
-- Local token reports using bundled and runtime `models.dev` pricing
-- Custom quota tracking for companion plugins
+- Quota UI surfaces: Toast, Sidebar panel, Compact status line, or terminal/slash-command only
+- Slash commands and terminal quota checks
+- Token usage reports with bundled/runtime pricing
+- Provider integrations and diagnostics
 
 <table>
   <tr>
@@ -161,11 +169,23 @@ If you want the `Quota` sidebar panel, you need the plugin in both OpenCode conf
       <img src="https://shawnkiser.com/opencode-quota/toast.webp" alt="OpenCode Quota popup toast" />
     </td>
     <td width="50%">
+      <img src="https://shawnkiser.com/opencode-quota/sidebar.webp" alt="OpenCode Quota TUI sidebar panel" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">Toast</td>
+    <td width="50%" align="center">TUI sidebar panel</td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="https://shawnkiser.com/opencode-quota/status.webp" alt="OpenCode Quota TUI status line" />
+    </td>
+    <td width="50%">
       <img src="https://shawnkiser.com/opencode-quota/token.webp" alt="OpenCode Quota token report" />
     </td>
   </tr>
   <tr>
-    <td width="50%" align="center">Popup quota toast</td>
+    <td width="50%" align="center">TUI status line</td>
     <td width="50%" align="center"><code>/tokens_weekly</code> report</td>
   </tr>
 </table>
@@ -191,7 +211,14 @@ If you want the `Quota` sidebar panel, you need the plugin in both OpenCode conf
 | NanoGPT             | Usually automatic                                    | Existing OpenCode auth, global config, or env                  | Remote API               |
 | OpenCode Go         | [Needs quick setup](#opencode-go-quick-setup)        | Set workspace ID and `auth` cookie                             | Dashboard scraping       |
 
-Providers are auto-detected by default. To choose providers explicitly, set `enabledProviders` in `opencode-quota/quota-toast.json`:
+### Common Options
+
+Customize these settings in `opencode-quota/quota-toast.json`.
+
+<details>
+<summary><strong>Choose providers explicitly</strong></summary>
+
+Providers are auto-detected by default. To choose providers manually:
 
 ```jsonc
 {
@@ -199,9 +226,7 @@ Providers are auto-detected by default. To choose providers explicitly, set `ena
 }
 ```
 
-### Common Options
-
-Customize these settings in `opencode-quota/quota-toast.json`.
+</details>
 
 <details>
 <summary><strong>Show every quota window</strong></summary>
@@ -298,9 +323,13 @@ This is only for users who intentionally want `experimental.quotaToast` mirrored
 | `/tokens_session_all` | Current session plus descendant sessions           |
 | `/tokens_between`     | Tokens used between `YYYY-MM-DD YYYY-MM-DD`        |
 
-<a id="anthropic-claude-quick-setup"></a>
+### Provider quick setup
 
-### Anthropic quick setup
+Most providers work automatically. Open the matching setup note only when the provider table links you here.
+
+<a id="anthropic-claude-quick-setup"></a>
+<details>
+<summary><strong>Anthropic (Claude)</strong></summary>
 
 Install Claude Code, authenticate it, and make sure `claude` is on your `PATH`:
 
@@ -311,82 +340,41 @@ claude auth status
 
 If Claude lives at a custom path, set `anthropicBinaryPath` in `opencode-quota/quota-toast.json`.
 
-### Companion providers
-
-Some providers need an auth companion plugin. Add the companion plugin first and `@slkiser/opencode-quota` second.
+</details>
 
 <a id="cursor-quick-setup"></a>
+<details>
+<summary><strong>Cursor</strong></summary>
 
-#### Cursor
-
-Companion plugin: [`@playwo/opencode-cursor-oauth`](https://github.com/PoolPirate/opencode-cursor#readme)
-
-Add both plugins to `opencode.json`, with the Cursor auth plugin first:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@playwo/opencode-cursor-oauth", "@slkiser/opencode-quota"],
-  "provider": {
-    "cursor": {
-      "name": "Cursor",
-    },
-  },
-}
-```
-
-Then authenticate Cursor once:
+Use companion plugin [`@playwo/opencode-cursor-oauth`](https://github.com/PoolPirate/opencode-cursor#readme). Add it before `@slkiser/opencode-quota` in `opencode.json`, then authenticate once:
 
 ```bash
 opencode auth login --provider cursor
 ```
 
+</details>
+
 <a id="qwen-code-quick-setup"></a>
+<details>
+<summary><strong>Qwen Code</strong></summary>
 
-#### Qwen Code
+Use companion plugin [`opencode-qwencode-auth`](https://github.com/gustavodiasdev/opencode-qwencode-auth#readme). Add it before `@slkiser/opencode-quota` in `opencode.json`.
 
-Companion plugin: [`opencode-qwencode-auth`](https://github.com/gustavodiasdev/opencode-qwencode-auth#readme)
-
-Add both plugins to `opencode.json`, with the Qwen auth plugin first:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-qwencode-auth", "@slkiser/opencode-quota"],
-}
-```
+</details>
 
 <a id="google-antigravity-quick-setup"></a>
+<details>
+<summary><strong>Google Antigravity</strong></summary>
 
-#### Google Antigravity
+Use companion plugin [`opencode-antigravity-auth`](https://github.com/NoeFabris/opencode-antigravity-auth#readme). Add it before `@slkiser/opencode-quota` in `opencode.json`.
 
-Companion plugin: [`opencode-antigravity-auth`](https://github.com/NoeFabris/opencode-antigravity-auth#readme)
-
-Add both plugins to `opencode.json`, with the Antigravity auth plugin first:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-antigravity-auth", "@slkiser/opencode-quota"],
-}
-```
+</details>
 
 <a id="gemini-cli-quick-setup"></a>
+<details>
+<summary><strong>Gemini CLI</strong></summary>
 
-#### Gemini CLI
-
-Companion plugin: [`opencode-gemini-auth`](https://github.com/jenslys/opencode-gemini-auth#readme)
-
-Add both plugins to `opencode.json`, with the Gemini auth plugin first:
-
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-gemini-auth", "@slkiser/opencode-quota"],
-}
-```
-
-Then authenticate Google once:
+Use companion plugin [`opencode-gemini-auth`](https://github.com/jenslys/opencode-gemini-auth#readme). Add it before `@slkiser/opencode-quota` in `opencode.json`, then authenticate Google once:
 
 ```bash
 opencode auth login --provider google
@@ -394,9 +382,11 @@ opencode auth login --provider google
 
 If you use manual provider selection, include `google-gemini-cli` in `enabledProviders`.
 
-### OpenCode Go
+</details>
 
 <a id="opencode-go-quick-setup"></a>
+<details>
+<summary><strong>OpenCode Go</strong></summary>
 
 OpenCode Go quota scrapes the dashboard and needs a workspace ID plus an `auth` cookie:
 
@@ -405,9 +395,9 @@ export OPENCODE_GO_WORKSPACE_ID="your-workspace-id"
 export OPENCODE_GO_AUTH_COOKIE="your-auth-cookie"
 ```
 
-OpenCode Go can show **5h**, **Weekly**, and **Monthly** windows. Use `opencodeGoWindows` in `opencode-quota/quota-toast.json` to choose a subset.
+Use `opencodeGoWindows` to choose **5h**, **Weekly**, and/or **Monthly** windows. Environment variables take precedence over the optional `opencode-go.json` file.
 
-Environment variables take precedence over the optional `opencode-go.json` file. Run `/quota_status` to see the exact paths checked.
+</details>
 
 ### Troubleshooting
 
