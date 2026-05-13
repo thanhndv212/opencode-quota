@@ -168,8 +168,10 @@ export function formatResetCountdown(iso?: string, opts?: FormatResetCountdownOp
 
   if (opts?.compactRounded) {
     if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h`;
-    return `${minutes}m`;
+    const halfHours = Math.ceil(diffMinutes / 30);
+    const h = Math.floor(halfHours / 2);
+    if (h > 0) return halfHours % 2 === 1 ? `${h}.5h` : `${h}h`;
+    return `0.5h`;
   }
 
   if (days > 0) return `${days}d ${hours}h`;

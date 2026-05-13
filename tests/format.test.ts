@@ -149,7 +149,7 @@ describe("formatQuotaRows", () => {
     });
 
     // We don't assert exact time math; just that some countdown marker appears.
-    expect(out).toMatch(/(\d+[dhms]|reset)/);
+    expect(out).toMatch(/([\d.]+[dhms]|reset)/);
   });
 
   it("does not show reset countdown when quota is fully available", () => {
@@ -184,7 +184,7 @@ describe("formatQuotaRows", () => {
       ],
     });
 
-    expect(out).toContain("2h");
+    expect(out).toContain("2.5h");
     expect(out).not.toContain("2h 14m");
   });
 
@@ -207,7 +207,7 @@ describe("formatQuotaRows", () => {
       ],
     });
 
-    expect(out).toContain("14m");
+    expect(out).toContain("0.5h");
     expect(out).not.toContain("0h 14m");
   });
 
