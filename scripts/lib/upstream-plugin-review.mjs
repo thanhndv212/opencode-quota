@@ -141,14 +141,14 @@ export function buildUpstreamPluginReviewPrompt({
   lines.push(formatCheckOutcome(typecheckResult));
 
   if (!testResult.ok && testResult.output) {
-    lines.push("", "npm test output:");
+    lines.push("", `${testResult.command} output:`);
     lines.push("```text");
     lines.push(testResult.output.trim());
     lines.push("```");
   }
 
   if (!typecheckResult.ok && typecheckResult.output) {
-    lines.push("", "npm run typecheck output:");
+    lines.push("", `${typecheckResult.command} output:`);
     lines.push("```text");
     lines.push(typecheckResult.output.trim());
     lines.push("```");

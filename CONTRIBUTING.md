@@ -22,48 +22,50 @@ Thanks for contributing. This repo has strict local-only behavior and regression
 
 ## Development Setup
 
-- Node.js must be `>=18.0.0` (matches `package.json` engines).
-- Install dependencies with:
+- The published package runtime supports Node.js `>=18.0.0` (matches `package.json` engines).
+- Repository development uses pnpm v11, which requires Node.js `>=22` for the pnpm CLI.
+- Enable the pinned package manager and install dependencies with:
 
 ```sh
-npm install
+corepack enable
+corepack prepare pnpm@11.0.0 --activate
+pnpm install
 ```
 
-`npm install` runs `prepare`, which installs Husky hooks.
+`pnpm install` runs `prepare`, which installs Husky hooks.
 
 ## Local Quality Gates
 
 Pre-commit hooks currently run:
 
-- `npx lint-staged` (formats staged files via Prettier)
-- `npm run typecheck`
-- `npm test`
+- `pnpm exec lint-staged` (formats staged files via Prettier)
+- `pnpm run typecheck`
+- `pnpm test`
 
 Pre-push hooks currently run:
 
-- `npm ci`
+- `pnpm install --frozen-lockfile`
 
 Run checks manually before opening a PR:
 
 ```sh
-npm run typecheck
-npm test
-npm run build
+pnpm run typecheck
+pnpm test
+pnpm run build
 ```
 
-Use `npm run test:watch` for local iteration.
+Use `pnpm run test:watch` for local iteration. Use `pnpm run build:check` when you need the build plus package dry-run check.
 
 ## CI Checks (Automated)
 
 PR and `main` pushes trigger `.github/workflows/ci.yml` (`CI` workflow):
 
-- Job: `build`
-- Matrix: Node `18.x`, `20.x`, `22.x`
-- Steps: `npm ci`, `npm run typecheck`, `npm run build`, `npm test`
+- Job: `pnpm-quality` on Node `22.x`
+- Steps: `pnpm install --frozen-lockfile`, `pnpm run typecheck`, `pnpm run build`, `pnpm test`, `pnpm pack --dry-run`
+- Job: `runtime-smoke` on Node `18.x`, `20.x`, and `22.x`
+- Runtime smoke installs the packed package as a consumer with npm and verifies the exported server entrypoints plus `engines.node >=18.0.0`
 
-PR CI also runs `npm test` in the matrix job.
-
-Release workflow `.github/workflows/publish-npm.yml` runs on release/manual dispatch and includes typecheck, test, and build before publish. It is not a normal PR required check.
+Release workflow `.github/workflows/publish-npm.yml` runs on release/manual dispatch and uses pnpm for version sync, install, typecheck, build, and test before publishing. It keeps `npm publish --access public` only for the npm registry publish step.
 
 ## Branch Protection (Maintainers)
 
@@ -71,9 +73,9 @@ Recommended settings for `main`:
 
 - Require a pull request before merging.
 - Require branches to be up to date before merging.
-- Require status checks from workflow `CI` for every Node matrix entry.
+- Require status checks from workflow `CI` for `pnpm-quality` and every `runtime-smoke` matrix entry.
 - Select checks exactly as GitHub displays them in repository settings.
-- Typical names look like `build (18.x)`, `build (20.x)`, `build (22.x)` or `CI / build (18.x)` variants.
+- Typical names look like `pnpm-quality`, `runtime-smoke (18.x)`, `runtime-smoke (20.x)`, `runtime-smoke (22.x)` or `CI / ...` variants.
 - Block direct pushes to `main` for non-admin users.
 
 ## Repo Guardrails
@@ -109,9 +111,9 @@ When adding a provider, keep the README setup wording tied to real behavior.
 ## Pull Request Checklist
 
 - Linked issue (`Fixes #...` or `Refs #...`) when available, or included a short no-issue rationale in the PR.
-- `npm run typecheck` passes.
-- `npm test` passes.
-- `npm run build` passes.
+- `pnpm run typecheck` passes.
+- `pnpm test` passes.
+- `pnpm run build` passes.
 - Verified behavior against the current production released OpenCode version, and included the tested version in the PR notes.
 - Updated docs when user-facing commands/config/workflow changed (usually `README.md`; update this file when contributor workflow changes).
 - For new API-key/token providers, started from `contributing/provider-template/` or explained why the template does not apply.

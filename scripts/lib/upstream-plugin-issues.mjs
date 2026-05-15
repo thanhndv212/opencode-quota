@@ -40,7 +40,7 @@ function getDesiredIssueState(tracked, latest) {
 }
 
 export function buildUpstreamPluginIssueBody({ spec, tracked, latest, issueState }) {
-  const reviewCommand = "npm run upstream:prepare-review";
+  const reviewCommand = "pnpm run upstream:prepare-review";
   const intro =
     issueState === UPSTREAM_PLUGIN_ISSUE_STATE.UPDATE_AVAILABLE
       ? "An upstream companion plugin has a newer npm release than the copy tracked in this repository."

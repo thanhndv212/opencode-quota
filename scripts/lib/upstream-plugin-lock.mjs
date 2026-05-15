@@ -61,7 +61,7 @@ export async function readUpstreamPluginLock() {
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       throw new Error(
-        `Missing ${upstreamPluginLockPath}. Run npm run upstream:sync to create the tracked upstream plugin lock first.`,
+        `Missing ${upstreamPluginLockPath}. Run pnpm run upstream:sync to create the tracked upstream plugin lock first.`,
       );
     }
     throw error;

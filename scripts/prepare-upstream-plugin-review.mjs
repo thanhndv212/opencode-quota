@@ -25,7 +25,7 @@ async function readLockIfPresent() {
     return await readUpstreamPluginLock();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("Run npm run upstream:sync")) {
+    if (message.includes("upstream:sync")) {
       return { plugins: {} };
     }
     throw error;
@@ -42,11 +42,11 @@ function normalizeExecOutput(errorOrResult) {
     : combined;
 }
 
-async function runNpmCommand(args) {
-  const command = `npm ${args.join(" ")}`;
+async function runPackageManagerCommand(args) {
+  const command = `pnpm ${args.join(" ")}`;
 
   try {
-    const result = await execFileAsync("npm", args, {
+    const result = await execFileAsync("pnpm", args, {
       cwd: repoRoot,
       maxBuffer: 10 * 1024 * 1024,
     });
@@ -152,8 +152,8 @@ async function main() {
     diffPreviewByPath.set(change.path, trimDiffPreview(diffText).text);
   }
 
-  const testResult = await runNpmCommand(["test"]);
-  const typecheckResult = await runNpmCommand(["run", "typecheck"]);
+  const testResult = await runPackageManagerCommand(["test"]);
+  const typecheckResult = await runPackageManagerCommand(["run", "typecheck"]);
 
   printChangedPluginSummary(changedPlugins);
   console.log("");

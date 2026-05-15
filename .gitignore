@@ -4,6 +4,7 @@ dist/
 # Logs
 *.log
 npm-debug.log*
+pnpm-debug.log*
 
 # OS / editors
 .DS_Store
@@ -13,6 +14,7 @@ npm-debug.log*
 # Build / tooling artifacts
 *.tsbuildinfo
 coverage/
+.pnpm-store/
 
 # Local-only config/secrets
 .env

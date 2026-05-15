@@ -25,17 +25,23 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org/
 
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.0.0 --activate
+
       - name: Sync package.json version from release tag
         if: github.event_name == 'release'
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           echo "Setting package.json version to $VERSION (from tag $TAG)"
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          pnpm version "$VERSION" --no-git-tag-version --allow-same-version
+          pnpm install --lockfile-only
 
       - name: Verify package.json version matches release tag
         if: github.event_name == 'release'
-        run: npm run verify:release-version
+        run: pnpm run verify:release-version
 
       - name: Assert ref is a tag (release only)
         if: github.event_name == 'release'
@@ -47,16 +53,16 @@ jobs:
           esac
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
       - name: Publish
         run: npm publish --access public
@@ -67,7 +73,7 @@ jobs:
           TARGET_BRANCH: ${{ github.event.release.target_commitish }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
+          if git diff --quiet -- package.json pnpm-lock.yaml; then
             echo "No package version file changes to commit."
             exit 0
           fi
@@ -85,7 +91,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
+          git add package.json pnpm-lock.yaml
           git commit -m "chore(release): sync package version to ${VERSION}"
 
           git fetch origin "$BRANCH"

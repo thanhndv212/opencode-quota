@@ -78,13 +78,13 @@ describe("upstream-plugin-review", () => {
         ],
       ]),
       testResult: {
-        command: "npm test",
+        command: "pnpm test",
         exitCode: 0,
         ok: true,
         output: "",
       },
       typecheckResult: {
-        command: "npm run typecheck",
+        command: "pnpm run typecheck",
         exitCode: 1,
         ok: false,
         output: "Type error here",
@@ -95,8 +95,8 @@ describe("upstream-plugin-review", () => {
     expect(prompt).toContain("opencode-qwencode-auth: 1.2.0 -> 1.3.0");
     expect(prompt).toContain("references/upstream-plugins/opencode-qwencode-auth/package.json");
     expect(prompt).toContain("\"version\": \"1.3.0\"");
-    expect(prompt).toContain("`npm test`: passed");
-    expect(prompt).toContain("`npm run typecheck`: failed");
+    expect(prompt).toContain("`pnpm test`: passed");
+    expect(prompt).toContain("`pnpm run typecheck`: failed");
     expect(prompt).toContain("Type error here");
   });
 });
