@@ -46,7 +46,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object";
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function getNonEmptyString(value: unknown): string | undefined {

@@ -68,9 +68,7 @@ export const deepseekProvider: QuotaProvider = {
       providerId: "deepseek",
       fallbackOnError: false,
     });
-    if (!providerAvailable) {
-      return false;
-    }
+    if (providerAvailable) return true;
 
     return await hasDeepSeekApiKeyConfigured();
   },
@@ -80,11 +78,7 @@ export const deepseekProvider: QuotaProvider = {
   },
 
   async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryDeepSeekBalance({
-      requestTimeoutMs: ctx.config?.requestTimeoutMsConfigured
-        ? ctx.config.requestTimeoutMs
-        : undefined,
-    });
+    const result = await queryDeepSeekBalance({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
 
     return mapNullableProviderResult(result, {
       errorLabel: "DeepSeek",
