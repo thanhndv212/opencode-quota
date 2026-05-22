@@ -101,6 +101,7 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   gemini: "google-gemini-cli",
   "glm-coding-plan": "zhipu",
   "zhipu-coding-plan": "zhipu",
+  "zhipuai-coding-plan": "zhipu",
 };
 
 export const QUOTA_PROVIDER_RUNTIME_IDS: QuotaProviderRuntimeIds = {
@@ -122,7 +123,7 @@ export const QUOTA_PROVIDER_RUNTIME_IDS: QuotaProviderRuntimeIds = {
     "google",
   ],
   zai: ["zai", "glm", "zai-coding-plan"],
-  zhipu: ["zhipu", "glm-coding-plan", "zhipu-coding-plan"],
+  zhipu: ["zhipu", "glm-coding-plan", "zhipu-coding-plan", "zhipuai-coding-plan"],
   nanogpt: ["nanogpt", "nano-gpt"],
   "minimax-coding-plan": ["minimax-coding-plan", "minimax"],
   "minimax-china-coding-plan": [
@@ -205,7 +206,8 @@ export const QUOTA_PROVIDER_SHAPES: readonly QuotaProviderShape[] = [
     authentication: "external_api_key",
     authFallbacks: ["env_api_key", "global_opencode_config"],
     quota: "remote_api",
-    notes: "Requires CROF_API_KEY, CROFAI_API_KEY, or trusted user/global config; not available through OpenCode /connect",
+    notes:
+      "Requires CROF_API_KEY, CROFAI_API_KEY, or trusted user/global config; not available through OpenCode /connect",
   },
   {
     id: "google-antigravity",

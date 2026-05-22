@@ -11,8 +11,13 @@ import { getAuthPaths, readAuthFileCached } from "./opencode-auth.js";
 import type { AuthData, ZaiAuthData } from "./types.js";
 
 export const DEFAULT_ZHIPU_AUTH_CACHE_MAX_AGE_MS = 5_000;
-const ZHIPU_AUTH_KEYS = ["zhipu-coding-plan"] as const;
-const ZHIPU_PROVIDER_KEYS = ["zhipu", "zhipu-coding-plan", "glm-coding-plan"] as const;
+const ZHIPU_AUTH_KEYS = ["zhipu-coding-plan", "zhipuai-coding-plan"] as const;
+const ZHIPU_PROVIDER_KEYS = [
+  "zhipu",
+  "zhipu-coding-plan",
+  "zhipuai-coding-plan",
+  "glm-coding-plan",
+] as const;
 const ALLOWED_ZHIPU_ENV_VARS = ["ZHIPU_API_KEY", "ZHIPU_CODING_PLAN_API_KEY"] as const;
 
 export type ZhipuKeySource =

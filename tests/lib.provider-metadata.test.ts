@@ -75,7 +75,8 @@ describe("provider-metadata", () => {
         authentication: "external_api_key",
         authFallbacks: ["env_api_key", "global_opencode_config"],
         quota: "remote_api",
-        notes: "Requires CROF_API_KEY, CROFAI_API_KEY, or trusted user/global config; not available through OpenCode /connect",
+        notes:
+          "Requires CROF_API_KEY, CROFAI_API_KEY, or trusted user/global config; not available through OpenCode /connect",
       },
       {
         id: "google-antigravity",
@@ -194,6 +195,7 @@ describe("provider-metadata", () => {
       "zhipu",
       "glm-coding-plan",
       "zhipu-coding-plan",
+      "zhipuai-coding-plan",
     ]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS.nanogpt).toEqual(["nanogpt", "nano-gpt"]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS["minimax-coding-plan"]).toEqual([
@@ -241,16 +243,15 @@ describe("provider-metadata", () => {
       "zhipu",
       "glm-coding-plan",
       "zhipu-coding-plan",
+      "zhipuai-coding-plan",
     ]);
     expect(getQuotaProviderRuntimeIds("glm-coding-plan")).toEqual([
       "zhipu",
       "glm-coding-plan",
       "zhipu-coding-plan",
+      "zhipuai-coding-plan",
     ]);
-    expect(getQuotaProviderRuntimeIds("minimax")).toEqual([
-      "minimax-coding-plan",
-      "minimax",
-    ]);
+    expect(getQuotaProviderRuntimeIds("minimax")).toEqual(["minimax-coding-plan", "minimax"]);
     expect(getQuotaProviderRuntimeIds("minimax-cn")).toEqual([
       "minimax-china-coding-plan",
       "minimax-cn-coding-plan",
