@@ -791,6 +791,36 @@ describe("tui runtime helpers", () => {
     expect(collectQuotaRenderData).not.toHaveBeenCalled();
   });
 
+  it("registers home bottom when export is enabled even without visible home content", async () => {
+    writeFileSync(
+      join(worktreeDir, "opencode.json"),
+      JSON.stringify({
+        experimental: {
+          quotaToast: {
+            enabled: true,
+            export: { enabled: true },
+            maintainerAnnouncements: { home: false },
+            tuiCompactStatus: { enabled: false, homeBottom: false },
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const registration = await resolveTuiSurfaceRegistration({
+      state: {
+        provider: [],
+        path: { worktree: worktreeDir, directory: nestedDir },
+        session: { messages: () => [] },
+      },
+      client: {},
+    } as any);
+
+    expect(registration.homeBottom).toBe(true);
+    expect(registration.compact.homeBottom).toBe(false);
+    expect(registration.announcements.homeBottom).toBe(false);
+  });
+
   it("loads compact session surface while returning disabled sidebar when sidebar config is off", async () => {
     writeFileSync(
       join(worktreeDir, "opencode.json"),

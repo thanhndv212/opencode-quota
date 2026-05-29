@@ -261,6 +261,7 @@ export async function resolveTuiSurfaceRegistration(
     runtime.config.enabled &&
     runtime.config.maintainerAnnouncements.enabled &&
     runtime.config.maintainerAnnouncements.home;
+  const exportHomeBottom = runtime.config.enabled && runtime.config.export.enabled;
   const compactHomeBottom = compactEnabled && compact.homeBottom;
 
   return {
@@ -277,7 +278,7 @@ export async function resolveTuiSurfaceRegistration(
     announcements: {
       homeBottom: announcementHomeBottom,
     },
-    homeBottom: compactHomeBottom || announcementHomeBottom,
+    homeBottom: compactHomeBottom || announcementHomeBottom || exportHomeBottom,
   };
 }
 
@@ -456,7 +457,7 @@ export async function writeTuiQuotaExportIfEnabled(params: {
     roots: getTuiRuntimeRootHints(params.api),
   });
 
-  if (!runtime.config.export.enabled) {
+  if (!runtime.config.enabled || !runtime.config.export.enabled) {
     return;
   }
 

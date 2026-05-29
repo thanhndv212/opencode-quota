@@ -97,7 +97,7 @@ describe("buildQuotaExport", () => {
     mockReadCachedProviderResult.mockReset();
   });
 
-  it("returns status ok when provider has a cache hit with percent entries", async () => {
+  it("returns status ok and maps cached entries into export rows", async () => {
     mockReadCachedProviderResult.mockResolvedValue({
       hit: true,
       result: {
@@ -109,6 +109,8 @@ describe("buildQuotaExport", () => {
             resetTimeIso: "2026-07-01T00:00:00.000Z",
             label: "Monthly:",
           },
+          { name: "OpenCode Go", kind: "value", value: "$42.50", label: "Weekly:" },
+          { name: "Custom Metric", percentRemaining: 100, label: "Arbitrary:" },
         ],
         errors: [],
       },
@@ -131,45 +133,17 @@ describe("buildQuotaExport", () => {
     expect(provider.status).toBe("ok");
 
     if (provider.status === "ok") {
-      expect(provider.entries).toHaveLength(1);
-      expect(provider.entries[0]).toEqual({
-        name: "Copilot",
-        percentRemaining: 75,
-        resetAt: Math.floor(new Date("2026-07-01T00:00:00.000Z").getTime() / 1000),
-        window: "Monthly",
-        unlimited: false,
-      });
-    }
-  });
-
-  it("maps value-kind entries without percentRemaining", async () => {
-    mockReadCachedProviderResult.mockResolvedValue({
-      hit: true,
-      result: {
-        attempted: true,
-        entries: [
-          { name: "OpenCode Go", kind: "value", value: "$42.50", label: "Weekly:" },
-        ],
-        errors: [],
-      },
-      timestamp: new Date("2026-06-01T11:00:00.000Z").getTime(),
-    });
-
-    const exportData = await buildQuotaExport({
-      providers: [createMockProvider("opencode-go")],
-      ctx: createMockContext(),
-      ttlMs: 60_000,
-      fromCache: false,
-    });
-
-    const provider = exportData.providers["opencode-go"];
-    expect(provider.status).toBe("ok");
-
-    if (provider.status === "ok") {
-      expect(provider.entries[0].percentRemaining).toBeUndefined();
-      expect(provider.entries[0].unlimited).toBe(false);
-      // Label "Weekly:" normalizes to window "Weekly".
-      expect(provider.entries[0].window).toBe("Weekly");
+      expect(provider.entries).toEqual([
+        {
+          name: "Copilot",
+          percentRemaining: 75,
+          resetAt: Math.floor(new Date("2026-07-01T00:00:00.000Z").getTime() / 1000),
+          window: "Monthly",
+          unlimited: false,
+        },
+        { name: "OpenCode Go", window: "Weekly", unlimited: false },
+        { name: "Custom Metric", percentRemaining: 100, unlimited: false },
+      ]);
     }
   });
 
@@ -235,30 +209,6 @@ describe("buildQuotaExport", () => {
     expect(exportData.cacheAgeSeconds).toBe(7200);
   });
 
-  it("omits window when neither label nor name matches a known pattern", async () => {
-    mockReadCachedProviderResult.mockResolvedValue({
-      hit: true,
-      result: {
-        attempted: true,
-        entries: [{ name: "Custom Metric", percentRemaining: 100, label: "Arbitrary:" }],
-        errors: [],
-      },
-      timestamp: new Date("2026-06-01T11:00:00.000Z").getTime(),
-    });
-
-    const exportData = await buildQuotaExport({
-      providers: [createMockProvider("custom")],
-      ctx: createMockContext(),
-      ttlMs: 60_000,
-      fromCache: true,
-    });
-
-    const provider = exportData.providers.custom;
-    expect(provider.status).toBe("ok");
-    if (provider.status === "ok") {
-      expect(provider.entries[0].window).toBeUndefined();
-    }
-  });
 });
 
 describe("writeQuotaExport", () => {
