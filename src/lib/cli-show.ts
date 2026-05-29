@@ -200,7 +200,15 @@ async function runCliShowJsonOutput(params: {
     return config.enabledProviders.includes(p.id);
   });
 
-  const ctx = createQuotaProviderRuntimeContext(runtime);
+  // Normalize the cache-key inputs to match the TUI background writer
+  // (onlyCurrentModel: false, no session). Otherwise a user with
+  // onlyCurrentModel:true would compute a different key than the one the
+  // TUI wrote under, turning every provider into "unavailable".
+  const ctx = createQuotaProviderRuntimeContext({
+    ...runtime,
+    config: { ...runtime.config, onlyCurrentModel: false },
+    session: {},
+  });
   const exportData = await buildQuotaExport({
     providers: allProviders,
     ctx,
