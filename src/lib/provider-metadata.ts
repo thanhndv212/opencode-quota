@@ -286,7 +286,7 @@ export const QUOTA_PROVIDER_SHAPES: readonly QuotaProviderShape[] = [
   {
     id: "ollama-cloud",
     autoSetup: "manual_env_config",
-    authentication: "external_api_key",
+    authentication: "state_only",
     quota: "remote_api",
     notes: "Scrapes the Ollama Cloud settings page; requires __Secure-session cookie via OLLAMA_USAGE_COOKIE env or ollama-usage config",
   },
