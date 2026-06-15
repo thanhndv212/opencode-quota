@@ -1643,6 +1643,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       formatQuotaCommand({
         ...reportData,
         generatedAtMs,
+        percentDisplayMode: runtime.config.percentDisplayMode,
       }),
     );
   }

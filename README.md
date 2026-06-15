@@ -376,7 +376,7 @@ Existing `experimental.quotaToast` settings still work when no sidecar file exis
 | `minIntervalMs` | `300000` | Minimum fetch interval between provider updates. |
 | `requestTimeoutMs` | `5000` | Remote provider request timeout in milliseconds. |
 | `formatStyle` | `singleWindow` | Shared quota reset-period display for popup toasts and the Sidebar panel: `singleWindow` shows one reset period per provider; `allWindows` shows all reset periods per provider. Legacy `classic`/`grouped` aliases are still accepted. |
-| `percentDisplayMode` | `remaining` | Shared quota percentage meaning for popup toasts and the Sidebar panel: `remaining` shows quota left; `used` shows quota consumed. `/quota` keeps its existing remaining-percent output. |
+| `percentDisplayMode` | `remaining` | Shared quota percentage meaning for popup toasts, the Sidebar panel, and `/quota`: `remaining` shows quota left; `used` shows quota consumed. |
 | `onlyCurrentModel` | `false` | Filter quota rows to the current model/provider when that session selection can be resolved. |
 | `showSessionTokens` | `true` | Show the `Session input/output tokens` section when session token data is available. When cached input is present, the section keeps the legacy `in/out` layout and appends cached input in parentheses next to the input amount. |
 | `pricingSnapshot.source` | `"auto"` | Token pricing snapshot selection for `/tokens_*`: `auto`, `bundled`, or `runtime`. |
