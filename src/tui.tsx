@@ -339,7 +339,8 @@ function SidebarContentView(props: { api: TuiPluginApi; sessionID: string }) {
   };
 
   const displayLines = () => {
-    if (collapsed() || !hasDetailLines()) return lines();
+    if (!hasDetailLines()) return lines();
+    if (collapsed()) return [];
     return getSidebarPanelLinesExpanded(panel());
   };
 

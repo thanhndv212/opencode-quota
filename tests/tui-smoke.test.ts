@@ -260,7 +260,7 @@ describe("tui plugin smoke", () => {
     const collapsedHeader = collapsed.props.children[0];
     expect(collapsedHeader.props.children[0].props.children.props.children).toBe("▶ Quota");
     expect(collapsedHeader.props.children[1].props.children).toEqual([" (", 2, " providers)"]);
-    expect(collapsed.props.children[1].props.children[0].props.children).toBe("Copilot 5h 82%");
+    expect(collapsed.props.children[1].props.children).toEqual([]);
 
     collapsedHeader.props.children[0].props.onMouseDown();
 
@@ -275,6 +275,41 @@ describe("tui plugin smoke", () => {
     expect(
       expanded.props.children[1].props.children.map((line: any) => line.props.children),
     ).toEqual(["[Copilot]", "5h window 82%", "Weekly window 58%"]);
+  });
+
+  it("keeps non-expandable empty sidebar panels visible while collapsed", async () => {
+    const plugin = await loadTuiModule();
+    const { api, registered } = createApi();
+
+    loadTuiSessionQuotaSurfaces.mockResolvedValueOnce({
+      sidebar: { status: "ready", lines: [] },
+      compact: { status: "ready", text: "Session quota" },
+    });
+    resolveTuiSurfaceRegistration.mockResolvedValueOnce({
+      sidebar: { enabled: true },
+      compact: {
+        enabled: false,
+        homeBottom: false,
+        sessionPrompt: false,
+        hasNativeProviderQuota: false,
+        suppressedByNativeProviderQuota: false,
+      },
+      announcements: { homeBottom: false },
+      homeBottom: false,
+    });
+
+    await plugin.tui(api as any, undefined, {} as any);
+
+    const sidebarRegistration = registered.find((registration) => registration.order === 150);
+    expect(sidebarRegistration).toBeDefined();
+
+    sidebarRegistration!.slots.sidebar_content({}, { session_id: "session-1" });
+    await Promise.resolve();
+
+    const rendered = sidebarRegistration!.slots.sidebar_content({}, { session_id: "session-1" }) as any;
+    const header = rendered.props.children[0];
+    expect(header.props.children[0].props.children.props.children).toBe("Quota");
+    expect(rendered.props.children[1].props.children[0].props.children).toBe("Unavailable");
   });
 
   it("falls back to sidebar-only registration when surface resolution fails", async () => {
