@@ -106,7 +106,6 @@ function parseHumanReadableTime(timeStr: string): number {
 function parseDataSlotFormat(html: string): Partial<Record<string, ScrapedWindowUsage>> {
   const result: Partial<Record<string, ScrapedWindowUsage>> = {};
 
-  // ponytail: split consumes the delimiter, so each chunk is already isolated
   const items = html.split(/data-slot="usage-item"/);
 
   for (let i = 1; i < items.length; i++) {
