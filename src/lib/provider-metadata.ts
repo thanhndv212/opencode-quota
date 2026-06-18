@@ -9,6 +9,7 @@ export type CanonicalQuotaProviderId =
   | "chutes"
   | "google-antigravity"
   | "google-gemini-cli"
+  | "google-agy"
   | "zai"
   | "zhipu"
   | "nanogpt"
@@ -56,6 +57,7 @@ export const QUOTA_PROVIDER_LABELS: Readonly<Record<string, string>> = {
   copilot: "Copilot",
   "google-antigravity": "Google",
   "google-gemini-cli": "Gemini CLI",
+  "google-agy": "Google AGY",
   synthetic: "Synthetic",
   chutes: "Chutes",
   cursor: "Cursor",
@@ -99,6 +101,8 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   "google-gemini": "google-gemini-cli",
   "opencode-gemini-auth": "google-gemini-cli",
   gemini: "google-gemini-cli",
+  "opencode-agy-auth": "google-agy",
+  "google-agy-auth": "google-agy",
   "glm-coding-plan": "zhipu",
   "zhipu-coding-plan": "zhipu",
   "zhipuai-coding-plan": "zhipu",
@@ -120,6 +124,11 @@ export const QUOTA_PROVIDER_RUNTIME_IDS: QuotaProviderRuntimeIds = {
     "gemini",
     "opencode-gemini-auth",
     "google",
+  ],
+  "google-agy": [
+    "google-agy",
+    "opencode-agy-auth",
+    "google-agy-auth",
   ],
   zai: ["zai", "glm", "zai-coding-plan"],
   zhipu: ["zhipu", "glm-coding-plan", "zhipu-coding-plan", "zhipuai-coding-plan"],
@@ -213,6 +222,13 @@ export const QUOTA_PROVIDER_SHAPES: readonly QuotaProviderShape[] = [
     authentication: "companion_auth_oauth_token",
     quota: "remote_api",
     quickSetupAnchor: "gemini-cli",
+  },
+  {
+    id: "google-agy",
+    autoSetup: "needs_quick_setup",
+    authentication: "companion_auth_oauth_token",
+    quota: "remote_api",
+    quickSetupAnchor: "google-agy-quick-setup",
   },
   {
     id: "zai",

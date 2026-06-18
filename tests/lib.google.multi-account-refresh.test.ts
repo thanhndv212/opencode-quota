@@ -320,4 +320,52 @@ describe("google antigravity multi-account refresh", () => {
       error: "Google Antigravity requires the opencode-antigravity-auth plugin",
     });
   });
+
+  it("prioritizes managedProjectId and quotaProjectId over projectId/projectID", async () => {
+    const { readFile } = await import("fs/promises");
+
+    (readFile as any).mockResolvedValueOnce(
+      JSON.stringify({
+        version: 1,
+        accounts: [
+          {
+            email: "a@b.com",
+            refreshToken: "rtok",
+            projectId: "dev-proj",
+            projectID: "dev-proj-2",
+            managedProjectId: "managed-proj",
+            addedAt: 0,
+            lastUsed: 0,
+          },
+        ],
+      }),
+    );
+
+    const fetchSpy = vi.fn();
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
+    });
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          models: {
+            "claude-opus-4-5-thinking": {
+              quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
+            },
+          },
+        }),
+    });
+
+    vi.stubGlobal("fetch", fetchSpy as any);
+
+    await queryGoogleQuota(["CLAUDE"] as any);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const secondCall = fetchSpy.mock.calls[1];
+    expect(secondCall[0]).toBe("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+    const bodyObj = JSON.parse(secondCall[1].body);
+    expect(bodyObj.project).toBe("managed-proj");
+  });
 });

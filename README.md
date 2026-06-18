@@ -220,6 +220,7 @@ Most providers work automatically. If a provider has a “Needs setup” link, o
 | Chutes AI | API key/config | Remote API | Usage/quota |
 | Synthetic | Automatic | Remote API | Quota |
 | Google Antigravity | [Needs setup](#google-antigravity) | Remote API | Usage/quota |
+| Google AGY | [Needs setup](#google-agy-quick-setup) | Remote API | Usage/quota |
 | Gemini CLI | [Needs setup](#gemini-cli) | Remote API | Usage/quota |
 | Z.ai Coding Plan | OpenCode config | Remote API | Usage/quota |
 | Zhipu Coding Plan | OpenCode config | Remote API | Usage/quota |
@@ -639,6 +640,40 @@ Use companion plugin [`opencode-antigravity-auth`](https://github.com/NoeFabris/
 
 </details>
 
+<a id="google-agy-quick-setup"></a>
+<details>
+<summary><strong>Google AGY</strong></summary>
+
+Use companion plugin [`@anthonyhaussman/opencode-agy-auth`](https://www.npmjs.com/package/@anthonyhaussman/opencode-agy-auth). Add it before `@slkiser/opencode-quota` in `opencode.json`, then authenticate Google once:
+
+```bash
+opencode auth login --provider google-agy
+```
+
+If you use manual provider selection, include `google-agy` in `enabledProviders`.
+
+```jsonc
+{
+  "enabledProviders": ["google-agy"],
+}
+```
+
+If the AGY auth entry does not include a project id, set `OPENCODE_AGY_PROJECT_ID` or `provider.google-agy.options.projectId`.
+
+```jsonc
+{
+  "provider": {
+    "google-agy": {
+      "options": {
+        "projectId": "your-google-cloud-project"
+      }
+    }
+  }
+}
+```
+
+</details>
+
 <a id="gemini-cli"></a>
 <details>
 <summary><strong>Gemini CLI</strong></summary>
@@ -859,6 +894,21 @@ When the TUI plugin is installed, run `/quota_status` and check the `google_anti
 | Accounts not found | When the TUI plugin is installed, check the selected `antigravity-accounts.json` path shown by `/quota_status`. |
 | Refresh tokens invalid | Re-authenticate with the companion plugin. |
 | Provider returns no rows | When the TUI plugin is installed, check `live_probe`, `live_entry_*`, and `live_error_*` in `/quota_status`. |
+
+</details>
+
+<details>
+<summary><strong>Google AGY</strong></summary>
+
+Run `/quota_status` and check the `google_agy` section.
+
+| Symptom | Fix |
+| --- | --- |
+| Companion missing | Put `@anthonyhaussman/opencode-agy-auth` before `@slkiser/opencode-quota` in `opencode.json`. |
+| Provider not enabled in manual mode | Include `google-agy` in `enabledProviders` in `opencode-quota/quota-toast.json`. |
+| Auth missing | Run `opencode auth login --provider google-agy`. |
+| Project missing | Set `OPENCODE_AGY_PROJECT_ID` or `provider.google-agy.options.projectId`. |
+| Provider returns no rows | Check `live_probe`, `live_entry_*`, and `live_error_*` in `/quota_status`. |
 
 </details>
 

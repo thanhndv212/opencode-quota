@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { readAuthFileCached } from "./opencode-auth.js";
 import { fetchWithTimeout } from "./http.js";
 import {
@@ -6,36 +7,40 @@ import {
   setCachedAccessToken,
 } from "./google-token-cache.js";
 import {
-  clearGeminiCliCompanionCacheForTests as clearGeminiCliCompanionResolutionCacheForTests,
-  inspectGeminiCliCompanionPresence,
-  resolveGeminiCliClientCredentials,
-  type GeminiCliConfiguredCredentials,
-} from "./google-gemini-cli-companion.js";
+  clearAgyCompanionCacheForTests,
+  inspectAgyCompanionPresence,
+  resolveAgyClientCredentials,
+  type AgyConfiguredCredentials,
+} from "./google-agy-companion.js";
 import type {
   AuthData,
-  GeminiCliAuthSourceKey,
-  GeminiCliOAuthAuthData,
-  GeminiCliQuotaBucket,
-  GeminiCliResult,
+  GoogleAgyAuthSourceKey,
+  GoogleAgyQuotaBucket,
+  GoogleAgyResult,
   GoogleAccountError,
+  GeminiCliOAuthAuthData,
 } from "./types.js";
 
-export const DEFAULT_GEMINI_CLI_AUTH_CACHE_MAX_AGE_MS = 5_000;
+export const DEFAULT_AGY_AUTH_CACHE_MAX_AGE_MS = 5_000;
 
-const GEMINI_CLI_AUTH_KEYS = [
-  "google-gemini-cli",
-  "gemini-cli",
-  "opencode-gemini-auth",
-  "gemini",
-  "google",
-] as const satisfies readonly GeminiCliAuthSourceKey[];
+export const AGY_AUTH_KEYS = [
+  "google-agy",
+  "opencode-agy-auth",
+  "google-agy-auth",
+] as const satisfies readonly GoogleAgyAuthSourceKey[];
 
-const GEMINI_TOKEN_REFRESH_URL = "https://oauth2.googleapis.com/token";
-const GEMINI_QUOTA_API_URL = "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota";
-const GEMINI_TOKEN_TIMEOUT_MS = 8_000;
-const GEMINI_QUOTA_TIMEOUT_MS = 6_000;
-const GEMINI_ACCOUNTS_CONCURRENCY = 3;
-const GEMINI_CLI_USER_AGENT = `GeminiCLI/opencode-quota (${process.platform}; ${process.arch})`;
+const AGY_CODE_ASSIST_ENDPOINT =
+  process.env.OPENCODE_AGY_ENDPOINT || "https://daily-cloudcode-pa.googleapis.com";
+const AGY_QUOTA_API_URL = `${AGY_CODE_ASSIST_ENDPOINT}/v1internal:retrieveUserQuota`;
+const AGY_TOKEN_REFRESH_URL = "https://oauth2.googleapis.com/token";
+const AGY_TOKEN_TIMEOUT_MS = 8_000;
+const AGY_QUOTA_TIMEOUT_MS = 6_000;
+const AGY_ACCOUNTS_CONCURRENCY = 3;
+const AGY_USER_AGENT = "antigravity/cli/1.0.3 darwin/amd64";
+
+function createAgyActivityRequestId(): string {
+  return crypto.randomUUID();
+}
 
 type RefreshParts = {
   refreshToken: string;
@@ -43,8 +48,8 @@ type RefreshParts = {
   managedProjectId?: string;
 };
 
-export type GeminiCliAccount = {
-  sourceKey: GeminiCliAuthSourceKey;
+export type AgyAccount = {
+  sourceKey: GoogleAgyAuthSourceKey;
   refreshToken: string;
   projectId: string;
   email?: string;
@@ -52,7 +57,7 @@ export type GeminiCliAccount = {
   expiresAt?: number;
 };
 
-export type GeminiCliAuthPresence =
+export type AgyAuthPresence =
   | {
       state: "missing";
       sourceKey?: undefined;
@@ -61,13 +66,13 @@ export type GeminiCliAuthPresence =
     }
   | {
       state: "present";
-      sourceKey: GeminiCliAuthSourceKey;
+      sourceKey: GoogleAgyAuthSourceKey;
       accountCount: number;
       validAccountCount: number;
     }
   | {
       state: "invalid";
-      sourceKey?: GeminiCliAuthSourceKey;
+      sourceKey?: GoogleAgyAuthSourceKey;
       accountCount: number;
       validAccountCount: number;
       error: string;
@@ -99,7 +104,7 @@ function normalizeString(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-export function parseGeminiCliRefreshParts(refresh: string | undefined): RefreshParts {
+export function parseAgyRefreshParts(refresh: string | undefined): RefreshParts {
   const [refreshToken = "", projectId = "", managedProjectId = ""] = (refresh ?? "").split("|");
   return {
     refreshToken: refreshToken.trim(),
@@ -108,62 +113,46 @@ export function parseGeminiCliRefreshParts(refresh: string | undefined): Refresh
   };
 }
 
-function getAuthEntry(auth: AuthData, sourceKey: GeminiCliAuthSourceKey): GeminiCliOAuthAuthData | undefined {
-  return auth[sourceKey] as GeminiCliOAuthAuthData | undefined;
-}
-
-function resolveEmail(entry: GeminiCliOAuthAuthData): string | undefined {
-  return (
-    normalizeString(entry.email) ??
-    normalizeString(entry.accountEmail) ??
-    normalizeString(entry.login)
-  );
-}
-
-function resolveProjectId(
-  entry: GeminiCliOAuthAuthData,
-  parts: RefreshParts,
-  configuredProjectId?: string,
-): string | undefined {
-  return (
-    normalizeString(entry.managedProjectId) ??
-    normalizeString(entry.quotaProjectId) ??
-    parts.managedProjectId ??
-    normalizeString(entry.projectId) ??
-    normalizeString(entry.projectID) ??
-    parts.projectId ??
-    normalizeString(configuredProjectId)
-  );
-}
-
-export function resolveGeminiCliAccounts(
+export function resolveAgyAccounts(
   auth: AuthData | null | undefined,
   configuredProjectId?: string,
-): GeminiCliAccount[] {
+): AgyAccount[] {
   if (!auth) {
     return [];
   }
 
-  const accounts: GeminiCliAccount[] = [];
+  const accounts: AgyAccount[] = [];
   const seen = new Set<string>();
 
-  for (const sourceKey of GEMINI_CLI_AUTH_KEYS) {
-    const entry = getAuthEntry(auth, sourceKey);
+  for (const sourceKey of AGY_AUTH_KEYS) {
+    const entry = auth[sourceKey] as GeminiCliOAuthAuthData | undefined;
     if (!entry || entry.type !== "oauth") {
       continue;
     }
 
-    const parts = parseGeminiCliRefreshParts(entry.refresh);
+    const parts = parseAgyRefreshParts(entry.refresh);
     if (!parts.refreshToken) {
       continue;
     }
 
-    const projectId = resolveProjectId(entry, parts, configuredProjectId);
+    const projectId =
+      normalizeString(entry.managedProjectId) ??
+      normalizeString(entry.quotaProjectId) ??
+      parts.managedProjectId ??
+      normalizeString(entry.projectId) ??
+      normalizeString(entry.projectID) ??
+      parts.projectId ??
+      normalizeString(configuredProjectId);
+
     if (!projectId) {
       continue;
     }
 
-    const email = resolveEmail(entry);
+    const email =
+      normalizeString(entry.email) ??
+      normalizeString(entry.accountEmail) ??
+      normalizeString(entry.login);
+
     const key = `${parts.refreshToken}\n${projectId}`;
     if (seen.has(key)) {
       continue;
@@ -183,34 +172,10 @@ export function resolveGeminiCliAccounts(
   return accounts;
 }
 
-function countGeminiCliAuthEntries(auth: AuthData | null | undefined): number {
-  if (!auth) {
-    return 0;
-  }
-
-  return GEMINI_CLI_AUTH_KEYS.reduce((count, sourceKey) => {
-    const entry = getAuthEntry(auth, sourceKey);
-    return entry && entry.type === "oauth" ? count + 1 : count;
-  }, 0);
-}
-
-function firstGeminiCliAuthKey(auth: AuthData | null | undefined): GeminiCliAuthSourceKey | undefined {
-  if (!auth) {
-    return undefined;
-  }
-  return GEMINI_CLI_AUTH_KEYS.find((sourceKey) => getAuthEntry(auth, sourceKey)?.type === "oauth");
-}
-
-function getCompanionQuotaError(state: "missing" | "invalid"): string {
-  return state === "missing"
-    ? "Gemini CLI requires the opencode-gemini-auth plugin"
-    : "Installed opencode-gemini-auth package is incompatible";
-}
-
-export async function resolveGeminiCliConfiguredProjectId(
+export async function resolveAgyConfiguredProjectId(
   client?: ConfigClient,
 ): Promise<string | undefined> {
-  const explicitEnvProjectId = normalizeString(process.env.OPENCODE_GEMINI_PROJECT_ID);
+  const explicitEnvProjectId = normalizeString(process.env.OPENCODE_AGY_PROJECT_ID);
   if (explicitEnvProjectId) {
     return explicitEnvProjectId;
   }
@@ -219,12 +184,12 @@ export async function resolveGeminiCliConfiguredProjectId(
     try {
       const result = await client.config.get();
       const data = result?.data as { provider?: Record<string, { options?: Record<string, unknown> }> };
-      const configProjectId = normalizeString(data?.provider?.google?.options?.projectId);
+      const configProjectId = normalizeString(data?.provider?.["google-agy"]?.options?.projectId);
       if (configProjectId) {
         return configProjectId;
       }
     } catch {
-      // ignore and fall back to generic Google project env vars below
+      // ignore and fall back
     }
   }
 
@@ -234,25 +199,36 @@ export async function resolveGeminiCliConfiguredProjectId(
   );
 }
 
-export async function inspectGeminiCliAuthPresence(client?: ConfigClient): Promise<GeminiCliAuthPresence> {
+export async function inspectAgyAuthPresence(client?: ConfigClient): Promise<AgyAuthPresence> {
   const [auth, configuredProjectId] = await Promise.all([
-    readAuthFileCached({ maxAgeMs: DEFAULT_GEMINI_CLI_AUTH_CACHE_MAX_AGE_MS }),
-    resolveGeminiCliConfiguredProjectId(client),
+    readAuthFileCached({ maxAgeMs: DEFAULT_AGY_AUTH_CACHE_MAX_AGE_MS }),
+    resolveAgyConfiguredProjectId(client),
   ]);
-  const accountCount = countGeminiCliAuthEntries(auth);
+
+  let accountCount = 0;
+  if (auth) {
+    for (const sourceKey of AGY_AUTH_KEYS) {
+      const entry = auth[sourceKey];
+      if (entry && entry.type === "oauth") {
+        accountCount++;
+      }
+    }
+  }
+
   if (accountCount === 0) {
     return { state: "missing", accountCount: 0, validAccountCount: 0 };
   }
 
-  const accounts = resolveGeminiCliAccounts(auth, configuredProjectId);
-  const sourceKey = accounts[0]?.sourceKey ?? firstGeminiCliAuthKey(auth);
+  const accounts = resolveAgyAccounts(auth, configuredProjectId);
+  const sourceKey = accounts[0]?.sourceKey ?? AGY_AUTH_KEYS.find((key) => auth?.[key]?.type === "oauth");
+
   if (accounts.length === 0) {
     return {
       state: "invalid",
       ...(sourceKey ? { sourceKey } : {}),
       accountCount,
       validAccountCount: 0,
-      error: "Gemini CLI OAuth auth is missing a refresh token or project id",
+      error: "Google AGY OAuth auth is missing a refresh token or project id",
     };
   }
 
@@ -264,10 +240,10 @@ export async function inspectGeminiCliAuthPresence(client?: ConfigClient): Promi
   };
 }
 
-export async function hasGeminiCliQuotaRuntimeAvailable(client?: ConfigClient): Promise<boolean> {
+export async function hasAgyQuotaRuntimeAvailable(client?: ConfigClient): Promise<boolean> {
   const [authPresence, companionPresence] = await Promise.all([
-    inspectGeminiCliAuthPresence(client),
-    inspectGeminiCliCompanionPresence(),
+    inspectAgyAuthPresence(client),
+    inspectAgyCompanionPresence(),
   ]);
 
   return (
@@ -306,7 +282,7 @@ async function refreshAccessToken(params: {
 }): Promise<{ accessToken: string; expiresIn: number } | { error: string }> {
   try {
     const response = await fetchWithTimeout(
-      GEMINI_TOKEN_REFRESH_URL,
+      AGY_TOKEN_REFRESH_URL,
       {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -317,7 +293,7 @@ async function refreshAccessToken(params: {
           grant_type: "refresh_token",
         }),
       },
-      params.timeoutMs ?? GEMINI_TOKEN_TIMEOUT_MS,
+      params.timeoutMs ?? AGY_TOKEN_TIMEOUT_MS,
     );
 
     if (!response.ok) {
@@ -352,9 +328,9 @@ async function refreshAccessToken(params: {
   }
 }
 
-async function refreshGeminiCliAccessTokenWithCache(params: {
-  account: GeminiCliAccount;
-  credentials: GeminiCliConfiguredCredentials;
+async function refreshAgyAccessTokenWithCache(params: {
+  account: AgyAccount;
+  credentials: AgyConfiguredCredentials;
   skewMs?: number;
   force?: boolean;
   timeoutMs?: number;
@@ -400,19 +376,20 @@ async function refreshGeminiCliAccessTokenWithCache(params: {
   return { accessToken: refreshed.accessToken };
 }
 
-async function retrieveGeminiCliQuota(
+async function retrieveGoogleAgyQuota(
   accessToken: string,
   projectId: string,
-  timeoutMs: number = GEMINI_QUOTA_TIMEOUT_MS,
+  timeoutMs: number = AGY_QUOTA_TIMEOUT_MS,
 ): Promise<RetrieveUserQuotaResponse> {
   const response = await fetchWithTimeout(
-    GEMINI_QUOTA_API_URL,
+    AGY_QUOTA_API_URL,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
-        "User-Agent": GEMINI_CLI_USER_AGENT,
+        "User-Agent": AGY_USER_AGENT,
+        "x-activity-request-id": createAgyActivityRequestId(),
       },
       body: JSON.stringify({ project: projectId }),
     },
@@ -421,95 +398,88 @@ async function retrieveGeminiCliQuota(
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`Gemini CLI quota auth error: ${response.status}`);
+      throw new Error(`Google AGY quota auth error: ${response.status}`);
     }
-    throw new Error(`Gemini CLI quota API error: ${response.status}`);
+    throw new Error(`Google AGY quota API error: ${response.status}`);
   }
 
   return response.json() as Promise<RetrieveUserQuotaResponse>;
 }
 
-function formatDisplayName(modelId: string): string {
-  const cleaned = modelId.replace(/_/g, "-").trim();
-  if (!cleaned) {
-    return "Gemini";
+export function formatDisplayName(modelId: string): string {
+  // Replace all underscores with hyphens
+  let cleaned = modelId.replace(/_/g, "-").trim();
+
+  // Special cases for well-known prefixes
+  if (cleaned.toLowerCase().startsWith("claude-")) {
+    // Handle versions like claude-3-5-sonnet -> Claude 3.5 Sonnet
+    return cleaned
+      .split("-")
+      .map((part, i) => {
+        if (i === 0) return "Claude";
+        if (/^\d+$/.test(part) && /^\d+$/.test(cleaned.split("-")[i + 1] || "")) {
+          return part + "." + cleaned.split("-")[i + 1];
+        }
+        if (/^\d+$/.test(part) && /^\d+$/.test(cleaned.split("-")[i - 1] || "")) {
+          return ""; // Skip second part of version
+        }
+        return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+      })
+      .filter(Boolean)
+      .join(" ");
   }
 
-  const words = cleaned
-    .replace(/^gemini-/i, "")
-    .split("-")
-    .filter(Boolean)
-    .map((part) => {
-      if (/^[0-9]+(?:\.[0-9]+)*$/.test(part)) return part;
-      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
-    });
+  // Replace gpt-oss (case-insensitive) with a temporary placeholder
+  cleaned = cleaned.replace(/gpt-oss/gi, "GPT_OSS");
+  // Replace digit-digit with digit.digit (e.g. 4-6 to 4.6)
+  cleaned = cleaned.replace(/(\d+)-(\d+)/g, "$1.$2");
 
-  return words.length > 0 ? `Gemini ${words.join(" ")}` : "Gemini";
+  let suffix = "";
+  if (cleaned.toLowerCase().endsWith("-medium")) {
+    suffix = " (Medium)";
+    cleaned = cleaned.slice(0, -7);
+  } else if (cleaned.toLowerCase().endsWith("-large")) {
+    suffix = " (Large)";
+    cleaned = cleaned.slice(0, -6);
+  }
+
+  const parts = cleaned.split("-").filter(Boolean);
+  const formattedParts = parts.map((part) => {
+    if (part === "GPT_OSS") {
+      return "GPT-OSS";
+    }
+    const lower = part.toLowerCase();
+    if (lower === "gpt") return "GPT";
+    if (lower === "oss") return "OSS";
+    // If it's a size like 120b, capitalize it to 120B
+    if (/^\d+[a-zA-Z]+$/.test(part)) {
+      return part.toUpperCase();
+    }
+    // If it's a version number like 3.5 or 4.6, keep as-is
+    if (/^[0-9]+(?:\.[0-9]+)*$/.test(part)) {
+      return part;
+    }
+    return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+  });
+
+  return formattedParts.join(" ") + suffix;
 }
 
-type GeminiCliQualityTierKey = "pro" | "flash" | "flashLite";
-
-type GeminiCliQualityTierDefinition = {
-  key: GeminiCliQualityTierKey;
-  displayName: string;
-  order: number;
-};
-
-const GEMINI_CLI_QUALITY_TIERS = [
-  { key: "pro", displayName: "Gemini Pro", order: 0 },
-  { key: "flash", displayName: "Gemini Flash", order: 1 },
-  { key: "flashLite", displayName: "Gemini Flash Lite", order: 2 },
-] as const satisfies readonly GeminiCliQualityTierDefinition[];
-
-function getGeminiCliQualityTier(modelId: string): GeminiCliQualityTierDefinition | undefined {
-  const normalized = modelId.toLowerCase().replace(/_/g, "-");
-  const tokens = normalized.split(/[^a-z0-9]+/).filter(Boolean);
-
-  if (normalized.includes("flash-lite") || (tokens.includes("flash") && tokens.includes("lite"))) {
-    return GEMINI_CLI_QUALITY_TIERS[2];
-  }
-  if (tokens.includes("pro")) {
-    return GEMINI_CLI_QUALITY_TIERS[0];
-  }
-  if (tokens.includes("flash")) {
-    return GEMINI_CLI_QUALITY_TIERS[1];
-  }
-  return undefined;
-}
-
-function aggregateGeminiCliQualityTiers(
-  buckets: GeminiCliQuotaBucket[],
-): GeminiCliQuotaBucket[] {
-  const groupedBuckets = new Map<GeminiCliQualityTierKey, GeminiCliQuotaBucket>();
-  const unknownBuckets: GeminiCliQuotaBucket[] = [];
-
+function aggregateAgyBuckets(buckets: GoogleAgyQuotaBucket[]): GoogleAgyQuotaBucket[] {
+  const grouped = new Map<string, GoogleAgyQuotaBucket>();
   for (const bucket of buckets) {
-    const tier = getGeminiCliQualityTier(bucket.modelId);
-    if (!tier) {
-      unknownBuckets.push(bucket);
-      continue;
-    }
-
-    const candidate = { ...bucket, displayName: tier.displayName };
-    const existing = groupedBuckets.get(tier.key);
-    if (!existing || candidate.percentRemaining < existing.percentRemaining) {
-      groupedBuckets.set(tier.key, candidate);
+    const existing = grouped.get(bucket.modelId);
+    if (!existing || bucket.percentRemaining < existing.percentRemaining) {
+      grouped.set(bucket.modelId, bucket);
     }
   }
-
-  return [
-    ...GEMINI_CLI_QUALITY_TIERS.flatMap((tier) => {
-      const bucket = groupedBuckets.get(tier.key);
-      return bucket ? [bucket] : [];
-    }),
-    ...unknownBuckets,
-  ];
+  return Array.from(grouped.values());
 }
 
 function mapQuotaBuckets(
   buckets: RetrieveUserQuotaBucket[] | undefined,
-  account: GeminiCliAccount,
-): GeminiCliQuotaBucket[] {
+  account: AgyAccount,
+): GoogleAgyQuotaBucket[] {
   if (!buckets) {
     return [];
   }
@@ -519,10 +489,19 @@ function mapQuotaBuckets(
     .map((bucket) => {
       const modelId = normalizeString(bucket.modelId)!;
       const remainingFraction = bucket.remainingFraction;
-      const percentRemaining =
-        typeof remainingFraction === "number" && Number.isFinite(remainingFraction)
-          ? Math.round(remainingFraction * 100)
-          : 0;
+
+      let percentRemaining: number;
+      if (typeof remainingFraction === "number" && Number.isFinite(remainingFraction)) {
+        percentRemaining = Math.round(remainingFraction * 100);
+      } else if (
+        normalizeString(bucket.remainingAmount) &&
+        bucket.remainingAmount?.toLowerCase().includes("unlimited")
+      ) {
+        percentRemaining = 100;
+      } else {
+        percentRemaining = 0;
+      }
+
       return {
         modelId,
         displayName: formatDisplayName(modelId),
@@ -537,23 +516,23 @@ function mapQuotaBuckets(
       };
     });
 
-  return aggregateGeminiCliQualityTiers(normalizedBuckets);
+  return aggregateAgyBuckets(normalizedBuckets);
 }
 
 async function fetchAccountQuota(params: {
-  account: GeminiCliAccount;
-  credentials: GeminiCliConfiguredCredentials;
+  account: AgyAccount;
+  credentials: AgyConfiguredCredentials;
   timeoutMs?: number;
 }): Promise<{
   success: boolean;
-  buckets?: GeminiCliQuotaBucket[];
+  buckets?: GoogleAgyQuotaBucket[];
   error?: string;
   accountEmail?: string;
 }> {
   const accountEmail = params.account.email || params.account.sourceKey;
 
   try {
-    const tokenResult = await refreshGeminiCliAccessTokenWithCache({
+    const tokenResult = await refreshAgyAccessTokenWithCache({
       account: params.account,
       credentials: params.credentials,
       timeoutMs: params.timeoutMs,
@@ -564,14 +543,14 @@ async function fetchAccountQuota(params: {
 
     let quota: RetrieveUserQuotaResponse;
     try {
-      quota = await retrieveGeminiCliQuota(
+      quota = await retrieveGoogleAgyQuota(
         tokenResult.accessToken,
         params.account.projectId,
         params.timeoutMs,
       );
     } catch (err) {
       if (err instanceof Error && err.message.includes("auth error")) {
-        const retryToken = await refreshGeminiCliAccessTokenWithCache({
+        const retryToken = await refreshAgyAccessTokenWithCache({
           account: params.account,
           credentials: params.credentials,
           force: true,
@@ -580,7 +559,7 @@ async function fetchAccountQuota(params: {
         if ("error" in retryToken) {
           return { success: false, error: retryToken.error, accountEmail };
         }
-        quota = await retrieveGeminiCliQuota(
+        quota = await retrieveGoogleAgyQuota(
           retryToken.accessToken,
           params.account.projectId,
           params.timeoutMs,
@@ -607,35 +586,35 @@ async function fetchAccountQuota(params: {
   }
 }
 
-export async function queryGeminiCliQuota(
+export async function queryGoogleAgyQuota(
   client?: ConfigClient,
   options: { requestTimeoutMs?: number } = {},
-): Promise<GeminiCliResult> {
+): Promise<GoogleAgyResult> {
   const [auth, configuredProjectId] = await Promise.all([
-    readAuthFileCached({ maxAgeMs: DEFAULT_GEMINI_CLI_AUTH_CACHE_MAX_AGE_MS }),
-    resolveGeminiCliConfiguredProjectId(client),
+    readAuthFileCached({ maxAgeMs: DEFAULT_AGY_AUTH_CACHE_MAX_AGE_MS }),
+    resolveAgyConfiguredProjectId(client),
   ]);
-  const accounts = resolveGeminiCliAccounts(auth, configuredProjectId);
+  const accounts = resolveAgyAccounts(auth, configuredProjectId);
   if (accounts.length === 0) {
     return null;
   }
 
-  const credentials = await resolveGeminiCliClientCredentials();
+  const credentials = await resolveAgyClientCredentials();
   if (credentials.state !== "configured") {
     return {
       success: false,
-      error: getCompanionQuotaError(credentials.state),
+      error: credentials.error || "Google AGY companion auth plugin not found",
     };
   }
 
   const results = await mapWithConcurrency({
     items: accounts,
-    concurrency: GEMINI_ACCOUNTS_CONCURRENCY,
+    concurrency: AGY_ACCOUNTS_CONCURRENCY,
     fn: async (account) =>
       fetchAccountQuota({ account, credentials, timeoutMs: options.requestTimeoutMs }),
   });
 
-  const allBuckets: GeminiCliQuotaBucket[] = [];
+  const allBuckets: GoogleAgyQuotaBucket[] = [];
   const errors: GoogleAccountError[] = [];
 
   for (const result of results) {
@@ -649,7 +628,7 @@ export async function queryGeminiCliQuota(
   if (allBuckets.length === 0 && errors.length === 0) {
     return {
       success: false,
-      error: "No Gemini CLI quota data available",
+      error: "No Google AGY quota data available",
     };
   }
 
@@ -660,6 +639,6 @@ export async function queryGeminiCliQuota(
   };
 }
 
-export function clearGeminiCliRuntimeCacheForTests(): void {
-  clearGeminiCliCompanionResolutionCacheForTests();
+export function clearAgyRuntimeCacheForTests(): void {
+  clearAgyCompanionCacheForTests();
 }

@@ -7,6 +7,8 @@ import { inspectAntigravityCompanionPresence } from "./google-antigravity-compan
 import { inspectGeminiCliCompanionPresence } from "./google-gemini-cli-companion.js";
 import { inspectGeminiCliAuthPresence } from "./google-gemini-cli.js";
 import { inspectAntigravityAccountsPresence } from "./google.js";
+import { inspectAgyCompanionPresence } from "./google-agy-companion.js";
+import { inspectAgyAuthPresence } from "./google-agy.js";
 import { getAnthropicDiagnostics } from "./anthropic.js";
 import { getChutesKeyDiagnostics } from "./chutes.js";
 import { getNanoGptKeyDiagnostics, queryNanoGptQuota } from "./nanogpt.js";
@@ -636,6 +638,7 @@ export async function buildQuotaStatusReport(params: {
     summary: MaintainerAnnouncementsSummary;
   };
   geminiCliClient?: ConfigClient;
+  agyClient?: ConfigClient;
   generatedAtMs?: number;
 }): Promise<string> {
   const version = await getPackageVersion();
@@ -1555,6 +1558,35 @@ export async function buildQuotaStatusReport(params: {
   }
   appendProviderCompactLiveProbeRows(geminiCliRows, "google-gemini-cli", params.providerLiveProbes);
   sections.push(createKvSection("google_gemini_cli", "google_gemini_cli:", geminiCliRows));
+
+  // Google AGY
+  const agyAuthPresence = await inspectAgyAuthPresence(params.agyClient);
+  const agyCompanionPresence = await inspectAgyCompanionPresence();
+  const agyRows: ReportKvRow[] = [
+    { key: "auth_state", value: agyAuthPresence.state },
+    { key: "auth_source", value: agyAuthPresence.sourceKey ?? "auth.json" },
+    { key: "account_count", value: String(agyAuthPresence.accountCount) },
+    { key: "valid_account_count", value: String(agyAuthPresence.validAccountCount) },
+    { key: "companion_package_state", value: agyCompanionPresence.state },
+    {
+      key: "companion_package_path",
+      value:
+        agyCompanionPresence.state === "present" || agyCompanionPresence.state === "invalid"
+          ? agyCompanionPresence.resolvedPath ?? "(none)"
+          : "(none)",
+    },
+  ];
+  if (agyAuthPresence.state === "invalid") {
+    agyRows.push({ key: "auth_error", value: sanitizeDisplayText(agyAuthPresence.error) });
+  }
+  if (agyCompanionPresence.state !== "present") {
+    agyRows.push({
+      key: "companion_error",
+      value: sanitizeDisplayText(agyCompanionPresence.error),
+    });
+  }
+  appendProviderCompactLiveProbeRows(agyRows, "google-agy", params.providerLiveProbes);
+  sections.push(createKvSection("google_agy", "google_agy:", agyRows));
 
   if (params.googleRefresh?.attempted) {
     const googleRefreshRows: ReportKvRow[] = [];

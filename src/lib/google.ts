@@ -559,7 +559,7 @@ function extractModelQuotas(
  * Fetch quota for a single account
  */
 function getProjectId(account: AntigravityAccount): string | undefined {
-  return account.projectId || account.projectID || account.managedProjectId;
+  return account.managedProjectId || (account as any).quotaProjectId || account.projectId || account.projectID;
 }
 
 // NOTE: This plugin treats Google Antigravity as truly multi-account.

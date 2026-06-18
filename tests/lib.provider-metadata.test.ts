@@ -84,6 +84,13 @@ describe("provider-metadata", () => {
         quickSetupAnchor: "gemini-cli",
       },
       {
+        id: "google-agy",
+        autoSetup: "needs_quick_setup",
+        authentication: "companion_auth_oauth_token",
+        quota: "remote_api",
+        quickSetupAnchor: "google-agy-quick-setup",
+      },
+      {
         id: "zai",
         autoSetup: "yes",
         authentication: "opencode_auth_api_key",
@@ -187,6 +194,11 @@ describe("provider-metadata", () => {
       "opencode-gemini-auth",
       "google",
     ]);
+    expect(QUOTA_PROVIDER_RUNTIME_IDS["google-agy"]).toEqual([
+      "google-agy",
+      "opencode-agy-auth",
+      "google-agy-auth",
+    ]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS.zai).toEqual(["zai", "glm", "zai-coding-plan"]);
     expect(QUOTA_PROVIDER_RUNTIME_IDS.zhipu).toEqual([
       "zhipu",
@@ -234,6 +246,11 @@ describe("provider-metadata", () => {
       "gemini",
       "opencode-gemini-auth",
       "google",
+    ]);
+    expect(getQuotaProviderRuntimeIds("google-agy")).toEqual([
+      "google-agy",
+      "opencode-agy-auth",
+      "google-agy-auth",
     ]);
     expect(getQuotaProviderRuntimeIds("zai")).toEqual(["zai", "glm", "zai-coding-plan"]);
     expect(getQuotaProviderRuntimeIds("zhipu-coding-plan")).toEqual([
@@ -288,6 +305,13 @@ describe("provider-metadata", () => {
       quota: "remote_api",
       quickSetupAnchor: "gemini-cli",
     });
+    expect(getQuotaProviderShape("google-agy")).toEqual({
+      id: "google-agy",
+      autoSetup: "needs_quick_setup",
+      authentication: "companion_auth_oauth_token",
+      quota: "remote_api",
+      quickSetupAnchor: "google-agy-quick-setup",
+    });
     expect(getQuotaProviderShape("deep-seek")).toEqual({
       id: "deepseek",
       autoSetup: "yes",
@@ -302,6 +326,7 @@ describe("provider-metadata", () => {
     expect(getQuotaProviderDisplayLabel("anthropic")).toBe("Anthropic");
     expect(getQuotaProviderDisplayLabel("google-antigravity")).toBe("Google");
     expect(getQuotaProviderDisplayLabel("gemini-cli")).toBe("Gemini CLI");
+    expect(getQuotaProviderDisplayLabel("google-agy")).toBe("Google AGY");
     expect(getQuotaProviderDisplayLabel("cursor")).toBe("Cursor");
     expect(getQuotaProviderDisplayLabel("alibaba-coding-plan")).toBe("Alibaba Coding Plan");
     expect(getQuotaProviderDisplayLabel("synthetic")).toBe("Synthetic");

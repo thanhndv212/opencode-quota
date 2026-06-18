@@ -84,6 +84,19 @@ const geminiCliMocks = vi.hoisted(() => ({
   })),
 }));
 
+const agyMocks = vi.hoisted(() => ({
+  inspectAgyAuthPresence: vi.fn(async () => ({
+    state: "missing" as const,
+    accountCount: 0,
+    validAccountCount: 0,
+  })),
+  inspectAgyCompanionPresence: vi.fn(async () => ({
+    state: "missing" as const,
+    importSpecifier: "@anthonyhaussman/opencode-agy-auth/dist/src/constants.js",
+    error: "Install @anthonyhaussman/opencode-agy-auth separately to enable Google AGY quota",
+  })),
+}));
+
 const openaiMocks = vi.hoisted(() => ({
   resolveOpenAIOAuth: vi.fn(() => ({ state: "none" as const })),
 }));
@@ -239,6 +252,14 @@ vi.mock("../src/lib/google-gemini-cli.js", () => ({
 
 vi.mock("../src/lib/google-gemini-cli-companion.js", () => ({
   inspectGeminiCliCompanionPresence: geminiCliMocks.inspectGeminiCliCompanionPresence,
+}));
+
+vi.mock("../src/lib/google-agy.js", () => ({
+  inspectAgyAuthPresence: agyMocks.inspectAgyAuthPresence,
+}));
+
+vi.mock("../src/lib/google-agy-companion.js", () => ({
+  inspectAgyCompanionPresence: agyMocks.inspectAgyCompanionPresence,
 }));
 
 vi.mock("../src/lib/anthropic.js", () => ({
@@ -990,6 +1011,65 @@ describe("buildQuotaStatusReport", () => {
     expect(chutesSection).not.toContain("\u0007");
   });
 
+  it("reports Google AGY auth, companion, and live quota diagnostics", async () => {
+    const agyClient = { config: { get: vi.fn() } };
+    agyMocks.inspectAgyAuthPresence.mockResolvedValueOnce({
+      state: "present",
+      sourceKey: "google-agy",
+      accountCount: 2,
+      validAccountCount: 2,
+    });
+    agyMocks.inspectAgyCompanionPresence.mockResolvedValueOnce({
+      state: "present",
+      importSpecifier: "@anthonyhaussman/opencode-agy-auth/dist/src/constants.js",
+      resolvedPath: "/tmp/node_modules/@anthonyhaussman/opencode-agy-auth/dist/src/constants.js",
+    });
+
+    const report = await buildProviderStatusReport("google-agy", {
+      agyClient,
+      providerLiveProbes: [
+        {
+          providerId: "google-agy",
+          result: {
+            attempted: true,
+            entries: [
+              {
+                label: "Gemini Models:",
+                name: "Gemini Models (alice@example.com)",
+                group: "Google AGY",
+                percentRemaining: 42,
+                right: "120 left",
+                resetTimeIso: "2026-04-24T00:00:00.000Z",
+              },
+            ],
+            errors: [
+              {
+                label: "Google AGY",
+                message: "secondary account unavailable",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const agySection = getReportSection(report, "google_agy:");
+    expect(agySection).toContain("- auth_state: present");
+    expect(agySection).toContain("- auth_source: google-agy");
+    expect(agySection).toContain("- account_count: 2");
+    expect(agySection).toContain("- valid_account_count: 2");
+    expect(agySection).toContain("- companion_package_state: present");
+    expect(agySection).toContain(
+      "- companion_package_path: /tmp/node_modules/@anthonyhaussman/opencode-agy-auth/dist/src/constants.js",
+    );
+    expect(agySection).toContain("- live_probe: success");
+    expect(agySection).toContain(
+      "- live_entry_1: Gemini Models: 120 left percent_remaining=42 reset_at=2026-04-24T00:00:00.000Z",
+    );
+    expect(agySection).toContain("- live_error_1: secondary account unavailable");
+    expect(agyMocks.inspectAgyAuthPresence).toHaveBeenCalledWith(agyClient);
+  });
+
   it("sanitizes and truncates Synthetic live probe errors", async () => {
     syntheticMocks.getSyntheticKeyDiagnostics.mockResolvedValueOnce({
       configured: true,
@@ -1670,6 +1750,7 @@ nanogpt:
 copilot_quota_auth:
 google_antigravity:
 google_gemini_cli:
+google_agy:
 storage:
 pricing_snapshot:
 supported_providers_pricing:

@@ -17,6 +17,10 @@ export type GeminiCliAuthSourceKey =
   | "opencode-gemini-auth"
   | "gemini"
   | "google";
+export type GoogleAgyAuthSourceKey =
+  | "google-agy"
+  | "opencode-agy-auth"
+  | "google-agy-auth";
 export type CursorQuotaPlan = "none" | "pro" | "pro-plus" | "ultra";
 export type PricingSnapshotSource = "auto" | "bundled" | "runtime";
 export type PercentDisplayMode = "remaining" | "used";
@@ -363,6 +367,9 @@ export interface AuthData {
   "gemini-cli"?: GeminiCliOAuthAuthData;
   "opencode-gemini-auth"?: GeminiCliOAuthAuthData;
   gemini?: GeminiCliOAuthAuthData;
+  "google-agy"?: GeminiCliOAuthAuthData;
+  "opencode-agy-auth"?: GeminiCliOAuthAuthData;
+  "google-agy-auth"?: GeminiCliOAuthAuthData;
   openai?: OpenAIOAuthData;
   // Some OpenCode installs store ChatGPT auth under "codex".
   codex?: OpenAIOAuthData;
@@ -596,6 +603,25 @@ export interface GeminiCliQuotaResult {
   buckets: GeminiCliQuotaBucket[];
   errors?: GoogleAccountError[];
 }
+
+export interface GoogleAgyQuotaBucket {
+  modelId: string;
+  displayName: string;
+  percentRemaining: number;
+  resetTimeIso?: string;
+  remainingAmount?: string;
+  tokenType?: string;
+  accountEmail?: string;
+  sourceKey?: GoogleAgyAuthSourceKey;
+}
+
+export interface GoogleAgyQuotaResult {
+  success: true;
+  buckets: GoogleAgyQuotaBucket[];
+  errors?: GoogleAccountError[];
+}
+
+export type GoogleAgyResult = GoogleAgyQuotaResult | QuotaError | null;
 
 /** Result from fetching Google quota */
 export interface GoogleQuotaResult {

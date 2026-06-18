@@ -110,7 +110,7 @@ describe("gemini cli auth resolution", () => {
       {
         sourceKey: "google",
         refreshToken: "refresh-token",
-        projectId: "project-1",
+        projectId: "managed-project",
         email: "user@example.com",
         accessToken: "access-token",
         expiresAt: 123,
@@ -149,6 +149,51 @@ describe("gemini cli auth resolution", () => {
         projectId: "configured-project",
       },
     ]);
+  });
+
+  it("prioritizes managedProjectId and quotaProjectId over developer projectIds in resolveGeminiCliAccounts", () => {
+    const auth = {
+      google: {
+        type: "oauth" as const,
+        refresh: "refresh-token-1|dev-project-part|managed-project-part",
+        email: "alice@example.com",
+        projectId: "dev-project-entry",
+        projectID: "dev-project-entry-2",
+        managedProjectId: "managed-project-entry",
+        quotaProjectId: "quota-project-entry",
+      },
+    };
+
+    // Test 1: entry.managedProjectId takes top priority
+    let resolved = resolveGeminiCliAccounts(auth, "configured-project");
+    expect(resolved[0].projectId).toBe("managed-project-entry");
+
+    // Test 2: entry.quotaProjectId takes priority over entry.projectId/projectID and parts and configuredProjectId
+    const auth2 = {
+      google: {
+        type: "oauth" as const,
+        refresh: "refresh-token-1|dev-project-part|managed-project-part",
+        email: "alice@example.com",
+        projectId: "dev-project-entry",
+        projectID: "dev-project-entry-2",
+        quotaProjectId: "quota-project-entry",
+      },
+    };
+    resolved = resolveGeminiCliAccounts(auth2, "configured-project");
+    expect(resolved[0].projectId).toBe("quota-project-entry");
+
+    // Test 3: parts.managedProjectId takes priority over entry.projectId/projectID and parts.projectId and configuredProjectId
+    const auth3 = {
+      google: {
+        type: "oauth" as const,
+        refresh: "refresh-token-1|dev-project-part|managed-project-part",
+        email: "alice@example.com",
+        projectId: "dev-project-entry",
+        projectID: "dev-project-entry-2",
+      },
+    };
+    resolved = resolveGeminiCliAccounts(auth3, "configured-project");
+    expect(resolved[0].projectId).toBe("managed-project-part");
   });
 
   it("prefers explicit OpenCode provider config over generic Google project env vars", async () => {
