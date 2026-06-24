@@ -318,13 +318,27 @@
     // Group OpenCode Go entries by workspace; render others as individual cards
     const { groups, others } = groupOpenCodeGoEntries(filtered);
 
+    // Sort grouped workspaces by best remaining percentage (descending)
+    const sortedGroups = [...groups].sort(([, aw], [, bw]) => {
+      const aBest = Math.max(...aw.map(w => w.entry.percentRemaining ?? 0));
+      const bBest = Math.max(...bw.map(w => w.entry.percentRemaining ?? 0));
+      return bBest - aBest;
+    });
+
+    // Sort individual cards by remaining percentage (descending), value-only entries last
+    const sortedOthers = [...others].sort((a, b) => {
+      const aRem = a.percentRemaining ?? -1;
+      const bRem = b.percentRemaining ?? -1;
+      return bRem - aRem;
+    });
+
     // Render grouped OpenCode Go cards
-    for (const [workspace, windows] of groups) {
+    for (const [workspace, windows] of sortedGroups) {
       container.appendChild(renderGroupedOpenCodeGoCard(workspace, windows));
     }
 
     // Render remaining entries as individual cards
-    others.forEach(entry => {
+    sortedOthers.forEach(entry => {
       container.appendChild(renderProviderCard(entry));
     });
 
