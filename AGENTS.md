@@ -103,6 +103,7 @@ opencode-quota gui                     # Launch Electron app from PATH
 pnpm run pricing:refresh               # Fetch latest models.dev pricing
 pnpm run build:package:mac             # Build macOS .dmg
 pnpm run build:package:linux           # Build Linux .AppImage/.deb
+pnpm run build:install:mac             # Build macOS .dmg + install to /Applications
 pnpm run upstream:sync                 # Sync upstream plugin references
 ```
 

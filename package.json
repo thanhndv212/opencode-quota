@@ -44,6 +44,7 @@
     "build:package": "npm run build && npm run build:gui && npm run build:icons && electron-builder",
     "build:package:mac": "npm run build && npm run build:gui && npm run build:icons && electron-builder --mac",
     "build:package:linux": "npm run build && npm run build:gui && npm run build:icons && electron-builder --linux",
+    "build:install:mac": "npm run build:package:mac && rm -rf \"/Applications/OpenCode Quota.app\" && cp -R \"release/mac-arm64/OpenCode Quota.app\" \"/Applications/OpenCode Quota.app\"",
     "build:check": "pnpm run build && pnpm pack --dry-run",
     "pricing:refresh": "node scripts/refresh-modelsdev-pricing.mjs",
     "pricing:refresh:if-stale": "node scripts/refresh-modelsdev-pricing-if-stale.mjs",
