@@ -330,7 +330,7 @@
     // Sort individual cards: remaining > 0 first, then value/balance entries, then 0% last
     const sortedOthers = [...others].sort((a, b) => {
       const rank = (e) => {
-        if (e.percentRemaining == null) return 1;                            // value entry (no percentage field)
+        if (e.percentRemaining == null) return -9999;                        // value entry — pin to top
         if (e.percentRemaining > 0) return -e.percentRemaining;              // sort by remaining desc
         return 100;                                                          // 0% remaining last
       };
