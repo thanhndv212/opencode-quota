@@ -318,20 +318,21 @@
     // Group OpenCode Go entries by workspace; render others as individual cards
     const { groups, others } = groupOpenCodeGoEntries(filtered);
 
-    // Sort grouped workspaces by best remaining percentage (descending)
+    // Sort grouped workspaces by Monthly remaining (descending), fall back to best window
     const sortedGroups = [...groups].sort(([, aw], [, bw]) => {
-      const aBest = Math.max(...aw.map(w => w.entry.percentRemaining ?? 0));
-      const bBest = Math.max(...bw.map(w => w.entry.percentRemaining ?? 0));
-      return bBest - aBest;
+      const monthly = (ws) => ws.find(w => w.window === "Monthly")?.entry.percentRemaining;
+      const best = (ws) => Math.max(...ws.map(w => w.entry.percentRemaining ?? 0));
+      const aVal = monthly(aw) ?? best(aw);
+      const bVal = monthly(bw) ?? best(bw);
+      return bVal - aVal;
     });
 
-    // Sort individual cards: with remaining > 0 first, then value entries, then 0% last
+    // Sort individual cards: remaining > 0 first, then value/balance entries, then 0% last
     const sortedOthers = [...others].sort((a, b) => {
       const rank = (e) => {
-        if (e.kind === "value") return 1;                                     // value entries (DeepSeek balance etc.)
-        const rem = e.percentRemaining ?? 0;
-        if (rem > 0) return -rem;                                             // sort by remaining desc
-        return 100 - (e.percentRemaining ?? 0);                               // 0% entries last
+        if (e.percentRemaining == null) return 1;                            // value entry (no percentage field)
+        if (e.percentRemaining > 0) return -e.percentRemaining;              // sort by remaining desc
+        return 100;                                                          // 0% remaining last
       };
       return rank(a) - rank(b);
     });
