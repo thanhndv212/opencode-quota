@@ -1,0 +1,60 @@
+appId: ai.opencode.quota
+productName: "OpenCode Quota"
+copyright: "MIT"
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - package.json
+
+extraResources:
+  - from: dist/gui/renderer
+    to: renderer
+
+extraMetadata:
+  main: dist/gui/main.js
+
+asar: true
+
+npmRebuild: false
+
+mac:
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  target:
+    - dmg
+    - zip
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  title: "OpenCode Quota"
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+linux:
+  category: Development
+  icon: build/icons
+  target:
+    - AppImage
+    - deb
+  maintainer: "opencode-quota@opencode.ai"
+
+win:
+  icon: build/icon.ico
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true

@@ -15,6 +15,8 @@ pnpm-debug.log*
 *.tsbuildinfo
 coverage/
 .pnpm-store/
+release/
+package-lock.json
 
 # Local-only config/secrets
 .env

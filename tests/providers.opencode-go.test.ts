@@ -9,10 +9,12 @@ import {
 const mocks = vi.hoisted(() => ({
   fetchWithTimeout: vi.fn(),
   resolveOpenCodeGoConfigCached: vi.fn(),
+  resolveAllOpenCodeGoConfigs: vi.fn(),
 }));
 
 vi.mock("../src/lib/opencode-go-config.js", () => ({
   resolveOpenCodeGoConfigCached: mocks.resolveOpenCodeGoConfigCached,
+  resolveAllOpenCodeGoConfigs: mocks.resolveAllOpenCodeGoConfigs,
   DEFAULT_OPENCODE_GO_CONFIG_CACHE_MAX_AGE_MS: 30_000,
 }));
 
@@ -52,6 +54,9 @@ function mockConfigConfigured(workspaceId = "ws-123", authCookie = "cookie-abc")
     config: { workspaceId, authCookie },
     source: "env",
   });
+  mocks.resolveAllOpenCodeGoConfigs.mockResolvedValueOnce([
+    { workspaceId, authCookie },
+  ]);
 }
 
 type OpenCodeGoTestWindow = "rolling" | "weekly" | "monthly";
@@ -523,6 +528,177 @@ describe("opencode-go provider", () => {
     expectAttemptedWithErrorLabel(out, "OpenCode Go");
     expect(out.errors[0]?.message).toContain("Could not parse any known OpenCode Go dashboard usage windows");
   });
+
+  // ── Multi-workspace ──────────────────────────────────
+  function mockConfigMulti(
+    ...workspaces: Array<{ workspaceId: string; authCookie: string; label?: string }>
+  ) {
+    mocks.resolveOpenCodeGoConfigCached.mockResolvedValueOnce({
+      state: "configured_multi",
+      configs: workspaces.map((ws) => ({
+        workspaceId: ws.workspaceId,
+        authCookie: ws.authCookie,
+        label: ws.label,
+      })),
+      source: "env",
+    });
+    mocks.resolveAllOpenCodeGoConfigs.mockResolvedValueOnce(
+      workspaces.map((ws) => ({
+        workspaceId: ws.workspaceId,
+        authCookie: ws.authCookie,
+        label: ws.label,
+      })),
+    );
+  }
+
+  it("fetches and merges quota from multiple workspaces", async () => {
+    mockConfigMulti(
+      { workspaceId: "acme-corp", authCookie: "cookie-acme", label: "Acme Corp" },
+      { workspaceId: "personal", authCookie: "cookie-personal", label: "Personal" },
+    );
+
+    // Mock dashboard responses for each workspace (called in order)
+    mockDashboardSuccess(buildDashboardHtml(7, 18000, 2, 540000, 16, 2480000));   // Acme: 93/98/84% remaining
+    mockDashboardSuccess(buildDashboardHtml(50, 3600, 70, 7200, 90, 14400));       // Personal: 50/30/10% remaining
+
+    const out = await runProviderFetch();
+
+    expectAttemptedWithNoErrors(out);
+    expect(out.entries).toHaveLength(6); // 3 windows × 2 workspaces
+
+    // Acme Corp workspace
+    expect(out.entries[0]).toMatchObject({
+      name: "OpenCode Go (Acme Corp) 5h",
+      group: "OpenCode Go (Acme Corp)",
+      label: "5h:",
+      percentRemaining: 93,
+    });
+    expect(out.entries[1]).toMatchObject({
+      name: "OpenCode Go (Acme Corp) Weekly",
+      group: "OpenCode Go (Acme Corp)",
+      label: "Weekly:",
+      percentRemaining: 98,
+    });
+    expect(out.entries[2]).toMatchObject({
+      name: "OpenCode Go (Acme Corp) Monthly",
+      group: "OpenCode Go (Acme Corp)",
+      label: "Monthly:",
+      percentRemaining: 84,
+    });
+
+    // Personal workspace
+    expect(out.entries[3]).toMatchObject({
+      name: "OpenCode Go (Personal) 5h",
+      group: "OpenCode Go (Personal)",
+      label: "5h:",
+      percentRemaining: 50,
+    });
+    expect(out.entries[4]).toMatchObject({
+      name: "OpenCode Go (Personal) Weekly",
+      group: "OpenCode Go (Personal)",
+      label: "Weekly:",
+      percentRemaining: 30,
+    });
+    expect(out.entries[5]).toMatchObject({
+      name: "OpenCode Go (Personal) Monthly",
+      group: "OpenCode Go (Personal)",
+      label: "Monthly:",
+      percentRemaining: 10,
+    });
+  });
+
+  it("uses workspaceId as label when label is not provided in multi mode", async () => {
+    mockConfigMulti(
+      { workspaceId: "acme-corp", authCookie: "cookie-1" },
+      { workspaceId: "startup-xyz", authCookie: "cookie-2", label: "Startup" },
+    );
+
+    mockDashboardSuccess(buildDashboardHtml(10, 100, 20, 200, 30, 300));
+    mockDashboardSuccess(buildDashboardHtml(40, 400, 50, 500, 60, 600));
+
+    const out = await runProviderFetch();
+
+    expectAttemptedWithNoErrors(out);
+    expect(out.entries).toHaveLength(6);
+
+    // First workspace uses workspaceId as label
+    expect(out.entries[0]).toMatchObject({
+      name: "OpenCode Go (acme-corp) 5h",
+      group: "OpenCode Go (acme-corp)",
+    });
+
+    // Second workspace uses explicit label
+    expect(out.entries[3]).toMatchObject({
+      name: "OpenCode Go (Startup) 5h",
+      group: "OpenCode Go (Startup)",
+    });
+  });
+
+  it("handles partial failures in multi-workspace mode", async () => {
+    mockConfigMulti(
+      { workspaceId: "good-ws", authCookie: "cookie-good", label: "Good" },
+      { workspaceId: "bad-ws", authCookie: "cookie-bad", label: "Bad" },
+    );
+
+    // First workspace succeeds
+    mockDashboardSuccess(buildDashboardHtml(10, 100, 20, 200, 30, 300));
+
+    // Second workspace fails with HTTP error
+    mockDashboardHttpFailure(403, "Forbidden");
+
+    const out = await runProviderFetch();
+
+    // Should have entries from the good workspace
+    expect(out.entries).toHaveLength(3);
+    expect(out.entries[0]).toMatchObject({
+      name: "OpenCode Go (Good) 5h",
+      group: "OpenCode Go (Good)",
+    });
+
+    // Should have an error from the bad workspace
+    expect(out.errors).toHaveLength(1);
+    expect(out.errors[0]?.label).toBe("OpenCode Go (Bad)");
+    expect(out.errors[0]?.message).toContain("403");
+  });
+
+  it("handles all workspaces failing", async () => {
+    mockConfigMulti(
+      { workspaceId: "ws1", authCookie: "cookie-1", label: "One" },
+      { workspaceId: "ws2", authCookie: "cookie-2", label: "Two" },
+    );
+
+    mockDashboardHttpFailure(500, "Server error");
+    mockDashboardHttpFailure(403, "Forbidden");
+
+    const out = await runProviderFetch();
+
+    expect(out.entries).toHaveLength(0);
+    expect(out.errors).toHaveLength(2);
+    expect(out.errors[0]?.label).toBe("OpenCode Go (One)");
+    expect(out.errors[1]?.label).toBe("OpenCode Go (Two)");
+  });
+
+  it("single workspace in multi config still uses bare labels", async () => {
+    // When resolveOpenCodeGoConfigCached returns "configured" (not "configured_multi"),
+    // resolveAllOpenCodeGoConfigs returns a single-element array.
+    // The provider should detect this and use bare labels.
+    mockConfigConfigured("my-single-ws", "cookie-single");
+    mocks.resolveAllOpenCodeGoConfigs.mockResolvedValueOnce([
+      { workspaceId: "my-single-ws", authCookie: "cookie-single" },
+    ]);
+
+    mockDashboardSuccess(buildDashboardHtml(7, 18000, 2, 540000, 16, 2480000));
+
+    const out = await runProviderFetch();
+
+    expectAttemptedWithNoErrors(out);
+    expect(out.entries).toHaveLength(3);
+    // Backward-compatible: no workspace prefix for single workspace
+    expect(out.entries[0]).toMatchObject({
+      name: "OpenCode Go 5h",
+      group: "OpenCode Go",
+    });
+  });
 });
 
 describe("opencode-go matchesCurrentModel", () => {
@@ -543,6 +719,7 @@ describe("opencode-go isAvailable", () => {
 
   it.each([
     [{ state: "configured", config: { workspaceId: "ws", authCookie: "ck" }, source: "env" }, true],
+    [{ state: "configured_multi", configs: [{ workspaceId: "ws1", authCookie: "ck1" }, { workspaceId: "ws2", authCookie: "ck2" }], source: "env" }, true],
     [{ state: "incomplete", source: "env", missing: "authCookie" }, false],
     [{ state: "invalid", source: "/tmp/opencode-go.json", error: "broken" }, false],
     [{ state: "none" }, false],

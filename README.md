@@ -67,12 +67,16 @@ opencode-quota show --provider copilot
 
 ## What you get
 
+- **GUI Menubar App** — a standalone desktop tray app (macOS & Linux) with a Dashboard, Token Usage charts, Budget Alerts, Pricing Editor, and encrypted API Key Manager
 - A `Quota` Sidebar panel in the TUI
 - Popup quota toasts in OpenCode
 - A Compact status line in the TUI
 - `/quota`, `/quota_status`, and `/quota_announcements` slash commands in web/desktop, plus local TUI dialogs when the TUI plugin is installed
 - Token reports such as `/tokens_today` and `/tokens_weekly` in web/desktop, plus local TUI dialogs when the TUI plugin is installed
 - Provider diagnostics for auth, quota sources, pricing, and bundled maintainer announcements
+- Encrypted API key storage with cross-machine sharing
+- Budget alerts for token/cost thresholds per provider, model, or globally
+- User-defined pricing overrides for missing or incorrect model pricing
 
 <table>
   <tr>
@@ -205,6 +209,122 @@ Slash commands are deterministic and do not invoke a model. With the server plug
 | `/tokens_session` | Tokens used in the current session |
 | `/tokens_session_all` | Current session plus descendant sessions |
 | `/tokens_between` | Tokens used between `YYYY-MM-DD YYYY-MM-DD` |
+
+## GUI Menubar App
+
+Launch a standalone desktop tray app for visualizing quota, token usage, pricing, and API keys — no OpenCode session required.
+
+### Quick launch (no install)
+
+```bash
+opencode-quota gui
+```
+
+This spawns Electron from your `node_modules` or `PATH`. If Electron isn't found, install it first: `npm install -g electron`
+
+### Install as a desktop app
+
+#### macOS
+
+Download the latest `.dmg` from [GitHub Releases](https://github.com/slkiser/opencode-quota/releases), open it, and drag **OpenCode Quota** to `/Applications`.
+
+Or build from source:
+
+```bash
+git clone https://github.com/slkiser/opencode-quota
+cd opencode-quota
+npm install
+npm run build:package:mac
+# Open release/OpenCode Quota-*.dmg
+```
+
+The app lives in your **menubar** (top-right). Click the tray icon to open the quota dashboard.
+
+#### Linux
+
+Download the latest `.AppImage` from [GitHub Releases](https://github.com/slkiser/opencode-quota/releases):
+
+```bash
+chmod +x OpenCode-Quota-*.AppImage
+./OpenCode-Quota-*.AppImage
+```
+
+Or install the `.deb` package:
+
+```bash
+sudo dpkg -i opencode-quota_*.deb
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/slkiser/opencode-quota
+cd opencode-quota
+npm install
+npm run build:package:linux
+# Output in release/
+```
+
+The app lives in your **system tray**. Click the icon to open the quota dashboard.
+
+| Tab | What it shows |
+| --- | --- |
+| **Dashboard** | Live quota from all enabled providers — percent bars, remaining counts, reset timers. Filter by provider. |
+| **Tokens** | Token usage charts grouped by model or provider. Toggle day / week / month / all-time windows. USD cost breakdown with custom pricing support. |
+| **Alerts** | Configure budget thresholds (e.g. "alert when daily spend > $5 on OpenAI"). Per provider, per model, or global. Active alerts show a red badge on the tray icon. |
+| **Pricing** | View the models.dev pricing snapshot. Add custom per-1M-token pricing overrides for any provider/model to correct missing or incorrect rates. |
+| **API Keys** | Encrypted store for provider API keys (AES-256-GCM with PBKDF2 key derivation). Unlock with a master passphrase. Export/import encrypted bundles for cross-machine sharing. |
+
+## API Key Management
+
+OpenCode Quota includes an encrypted API key store that supplements the existing `auth.json` mechanism. Store your own API keys for any provider and share them securely across machines.
+
+### Security
+
+- **AES-256-GCM** encryption with unique IV per entry
+- **PBKDF2** key derivation (600,000 iterations, SHA-512)
+- Plaintext keys are **never written to disk** — only encrypted ciphertext
+- A verification token prevents brute-force passphrase guessing
+- Keys are decrypted into memory only when the store is **unlocked**
+
+### Usage
+
+From the GUI app **API Keys** tab:
+
+1. **Create a store** with a master passphrase
+2. **Add keys** for any provider (e.g. `openai`, `anthropic`, `deepseek`)
+3. **Lock/unlock** the store between sessions
+4. **Export** keys to an encrypted share file (secured with a one-time passphrase)
+5. **Import** share files on another machine and merge keys
+
+Stored API keys take precedence over OpenCode's native OAuth tokens when both exist for a provider.
+
+## Budget Alerts
+
+Define threshold rules to monitor your token spending across any time window.
+
+| Alert scope | Example |
+| --- | --- |
+| **Global** | "Alert when total daily spend exceeds $10" |
+| **Per provider** | "Alert when weekly OpenAI cost exceeds $5" |
+| **Per model** | "Alert when monthly GPT-5 input tokens exceed 1M" |
+
+Alerts support two directions:
+- **Above threshold** — triggers when usage exceeds the limit
+- **Below threshold** — triggers when remaining quota falls below a minimum
+
+Manage alerts from the GUI **Alerts** tab or programmatically via the budget-alerts library API.
+
+## Custom Pricing
+
+Override missing or incorrect model pricing with your own per-1M-token USD rates.
+
+Use cases:
+- A new model not yet in the models.dev pricing snapshot
+- Internal/custom model endpoints with known pricing
+- Correcting stale snapshot data without waiting for a refresh
+
+Custom pricing is managed from the GUI **Pricing** tab or via `src/lib/user-pricing.ts`. Overrides are stored in `~/.config/opencode-quota/user-pricing.json` and merged with the models.dev snapshot at lookup time — user-defined fields take precedence, unset fields fall through to the snapshot.
 
 ## Providers
 

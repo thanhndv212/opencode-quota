@@ -10,6 +10,7 @@ const USAGE = [
   "Usage:",
   "  npx @slkiser/opencode-quota init [--sync-legacy-config]",
   "  npx @slkiser/opencode-quota show [--provider <provider-id>] [--json] [--threshold <pct>]",
+  "  npx @slkiser/opencode-quota gui",
   "  npx @slkiser/opencode-quota --help",
   "",
   "Commands:",
@@ -19,6 +20,7 @@ const USAGE = [
   "          --json               Machine-readable JSON output (reads from cache)",
   "          --threshold <pct>    With --json, exit 1 if below <pct>%, 2 if no cached quota",
   "          --provider <id>      Filter to one provider",
+  "  gui     Launch the desktop menubar GUI app (requires Electron)",
 ].join("\n");
 
 function printUsage(): void {
@@ -70,6 +72,46 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === "show") {
     const { runCliShowCommand } = await import("../lib/cli-show.js");
     return await runCliShowCommand({ argv: rest });
+  }
+
+  if (command === "gui") {
+    const { spawn } = await import("child_process");
+    const { fileURLToPath } = await import("url");
+    const { dirname, join } = await import("path");
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const guiMainPath = join(__dirname, "..", "gui", "main.js");
+
+    // Try to find electron
+    const electronCmd = process.env.ELECTRON_PATH || "electron";
+
+    console.log("Launching OpenCode Quota GUI...");
+    console.log(`  Electron: ${electronCmd}`);
+    console.log(`  Main:     ${guiMainPath}`);
+
+    const child = spawn(electronCmd, [guiMainPath], {
+      stdio: "inherit",
+      detached: true,
+    });
+
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        console.error("");
+        console.error("Error: Electron not found.");
+        console.error("");
+        console.error("Install it with one of:");
+        console.error("  npm install -g electron");
+        console.error("  npx electron <path-to-gui-main.js>");
+        console.error("");
+        console.error("Or set ELECTRON_PATH to your electron binary.");
+        process.exit(1);
+      }
+      throw err;
+    });
+
+    child.unref();
+    return 0;
   }
 
   printUsage();

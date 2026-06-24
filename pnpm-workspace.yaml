@@ -1,5 +1,6 @@
 allowBuilds:
   better-sqlite3: true
+  electron-winstaller: set this to true or false
   esbuild: true
   msgpackr-extract: true
 blockExoticSubdeps: true

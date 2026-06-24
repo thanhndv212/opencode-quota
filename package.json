@@ -21,11 +21,16 @@
     "./tui": {
       "types": "./dist/tui.d.ts",
       "default": "./dist/tui.tsx"
+    },
+    "./gui": {
+      "types": "./dist/gui/main.d.ts",
+      "default": "./dist/gui/main.js"
     }
   },
   "oc-plugin": [
     "server",
-    "tui"
+    "tui",
+    "gui"
   ],
   "files": [
     "dist",
@@ -34,6 +39,11 @@
   ],
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc && node scripts/copy-data.mjs && node scripts/prepare-tui-dist.mjs",
+    "build:gui": "node scripts/build-gui.mjs",
+    "build:icons": "node scripts/generate-icons.mjs",
+    "build:package": "npm run build && npm run build:gui && npm run build:icons && electron-builder",
+    "build:package:mac": "npm run build && npm run build:gui && npm run build:icons && electron-builder --mac",
+    "build:package:linux": "npm run build && npm run build:gui && npm run build:icons && electron-builder --linux",
     "build:check": "pnpm run build && pnpm pack --dry-run",
     "pricing:refresh": "node scripts/refresh-modelsdev-pricing.mjs",
     "pricing:refresh:if-stale": "node scripts/refresh-modelsdev-pricing-if-stale.mjs",
@@ -72,6 +82,8 @@
   "devDependencies": {
     "@opencode-ai/plugin": "^1.4.3",
     "@types/node": "^22.0.0",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.8.0",
