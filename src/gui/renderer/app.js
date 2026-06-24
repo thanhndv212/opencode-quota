@@ -260,10 +260,11 @@
     }
 
     for (const w of windows) {
-      const pct = Math.max(0, Math.min(100, w.entry.percentRemaining || 0));
+      const remaining = Math.max(0, Math.min(100, w.entry.percentRemaining || 0));
+      const used = 100 - remaining;
       let barClass = "good";
-      if (pct <= 10) barClass = "danger";
-      else if (pct <= 25) barClass = "warning";
+      if (used >= 90) barClass = "danger";
+      else if (used >= 75) barClass = "warning";
 
       const row = el("div", { style: { display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" } });
 
@@ -272,11 +273,11 @@
 
       // Mini bar
       const barWrap = el("div", { className: "percent-bar-container", style: { flex: "1", margin: "0", height: "12px" } });
-      barWrap.appendChild(el("div", { className: "percent-bar-fill " + barClass, style: { width: pct + "%" } }));
+      barWrap.appendChild(el("div", { className: "percent-bar-fill " + barClass, style: { width: used + "%" } }));
       row.appendChild(barWrap);
 
       // Percentage
-      row.appendChild(el("span", { style: { width: "36px", fontSize: "10px", fontFamily: "var(--font-mono)", textAlign: "right", flexShrink: "0", color: "var(--text-primary)" } }, Math.round(pct) + "%"));
+      row.appendChild(el("span", { style: { width: "36px", fontSize: "10px", fontFamily: "var(--font-mono)", textAlign: "right", flexShrink: "0", color: "var(--text-primary)" } }, Math.round(used) + "%"));
 
       card.appendChild(row);
     }
@@ -348,17 +349,18 @@
     card.appendChild(header);
 
     if (entry.kind !== "value" && entry.percentRemaining != null) {
-      const pct = Math.max(0, Math.min(100, entry.percentRemaining));
+      const remaining = Math.max(0, Math.min(100, entry.percentRemaining));
+      const used = 100 - remaining;
       let barClass = "good";
-      if (pct <= 10) barClass = "danger";
-      else if (pct <= 25) barClass = "warning";
+      if (used >= 90) barClass = "danger";
+      else if (used >= 75) barClass = "warning";
 
       const barContainer = el("div", { className: "percent-bar-container" });
-      barContainer.appendChild(el("div", { className: "percent-bar-fill " + barClass, style: { width: pct + "%" } }));
+      barContainer.appendChild(el("div", { className: "percent-bar-fill " + barClass, style: { width: used + "%" } }));
       card.appendChild(barContainer);
 
       const label = el("div", { className: "percent-bar-label" });
-      label.appendChild(el("span", { className: "value" }, Math.round(pct) + "% remaining"));
+      label.appendChild(el("span", { className: "value" }, Math.round(used) + "% used"));
 
       let resetText = "";
       if (entry.resetTimeIso) {
