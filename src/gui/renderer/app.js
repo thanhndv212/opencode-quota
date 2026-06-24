@@ -175,22 +175,39 @@
   // Tab Nav
   // ===========================================================================
   const TABS = [
-    { label: "◉ Dashboard" },
-    { label: "⬡ Tokens" },
-    { label: "⚠ Alerts" },
-    { label: "$ Pricing" },
-    { label: "🔑 API Keys" },
+    { label: "◉ Dashboard", title: "Dashboard" },
+    { label: "⬡ Tokens", title: "Token Usage" },
+    { label: "⚠ Alerts", title: "Budget Alerts" },
+    { label: "$ Pricing", title: "Pricing" },
+    { label: "🔑 API Keys", title: "API Keys" },
   ];
+
+  function getActiveTabTitle() {
+    return TABS[activeTab]?.title || "Quota Monitor";
+  }
 
   function renderTabNav() {
     const nav = el("div", { className: "tab-nav" });
     TABS.forEach((tab, i) => {
       nav.appendChild(el("button", {
         className: "tab-btn" + (i === activeTab ? " active" : ""),
-        onClick: () => { activeTab = i; renderContent(); if (i === 1) fetchTokens(); if (i === 2) loadAlerts(); if (i === 3) loadPricing(); if (i === 4) loadApikeyStatus(); },
+        onClick: () => {
+          activeTab = i;
+          updateHeaderTitle();
+          renderContent();
+          if (i === 1) fetchTokens();
+          if (i === 2) loadAlerts();
+          if (i === 3) loadPricing();
+          if (i === 4) loadApikeyStatus();
+        },
       }, tab.label));
     });
     return nav;
+  }
+
+  function updateHeaderTitle() {
+    const h1 = $(".app-header h1");
+    if (h1) h1.textContent = getActiveTabTitle();
   }
 
   // ===========================================================================
