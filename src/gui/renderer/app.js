@@ -68,6 +68,13 @@
     toastTimer = setTimeout(() => toast.remove(), 3000);
   }
 
+  // Global Escape key handler – closes the topmost modal overlay
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const overlays = $$(".modal-overlay");
+    if (overlays.length > 0) overlays[overlays.length - 1].remove();
+  });
+
   // ===========================================================================
   // API calls
   // ===========================================================================
@@ -85,7 +92,8 @@
   async function fetchTokens() {
     setLoading(true);
     try {
-      const window = $(".token-window-select")?.value || "week";
+      const activeBtn = $(".token-window-select.btn-primary");
+      const window = activeBtn?.getAttribute("data-window") || "week";
       tokenData = await api.tokens.query({ window });
     } catch (e) {
       showToast(e.message, "error");

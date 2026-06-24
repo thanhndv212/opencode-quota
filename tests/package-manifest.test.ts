@@ -40,12 +40,12 @@ describe("package manifest compatibility", () => {
     expect(pkg.scripts?.build).toContain("node scripts/clean-dist.mjs && tsc");
   });
 
-  it("ships explicit server, tui, and init bin entrypoints for OpenCode", () => {
+  it("ships explicit server, tui, gui, and init bin entrypoints for OpenCode", () => {
     expect(pkg.main).toBe("./dist/index.js");
     expect(pkg.bin).toEqual({
       "opencode-quota": "./dist/bin/opencode-quota.js",
     });
-    expect(pkg["oc-plugin"]).toEqual(["server", "tui"]);
+    expect(pkg["oc-plugin"]).toEqual(["server", "tui", "gui"]);
     expect(pkg.dependencies?.["@clack/prompts"]).toBeTruthy();
     expect(pkg.exports?.["."]).toEqual({
       default: "./dist/index.js",
