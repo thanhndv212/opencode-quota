@@ -325,11 +325,15 @@
       return bBest - aBest;
     });
 
-    // Sort individual cards by remaining percentage (descending), value-only entries last
+    // Sort individual cards: with remaining > 0 first, then value entries, then 0% last
     const sortedOthers = [...others].sort((a, b) => {
-      const aRem = a.percentRemaining ?? -1;
-      const bRem = b.percentRemaining ?? -1;
-      return bRem - aRem;
+      const rank = (e) => {
+        if (e.kind === "value") return 1;                                     // value entries (DeepSeek balance etc.)
+        const rem = e.percentRemaining ?? 0;
+        if (rem > 0) return -rem;                                             // sort by remaining desc
+        return 100 - (e.percentRemaining ?? 0);                               // 0% entries last
+      };
+      return rank(a) - rank(b);
     });
 
     // Render grouped OpenCode Go cards
