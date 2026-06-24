@@ -213,6 +213,82 @@
   // ===========================================================================
   // Dashboard
   // ===========================================================================
+
+  // Regex to match OpenCode Go multi-window entries like "OpenCode Go (dvtn) 5h"
+  const OPENCODE_GO_ENTRY_RE = /^OpenCode Go \(([^)]+)\) (5h|Weekly|Monthly)$/;
+
+  function parseOpenCodeGoEntry(entry) {
+    if (entry.kind === "value") return null;
+    const m = (entry.name || "").match(OPENCODE_GO_ENTRY_RE);
+    if (!m) return null;
+    return { workspace: m[1], window: m[2], entry };
+  }
+
+  function groupOpenCodeGoEntries(entries) {
+    const groups = new Map();
+    const others = [];
+    for (const e of entries) {
+      const parsed = parseOpenCodeGoEntry(e);
+      if (!parsed) { others.push(e); continue; }
+      if (!groups.has(parsed.workspace)) groups.set(parsed.workspace, []);
+      groups.get(parsed.workspace).push(parsed);
+    }
+    return { groups, others };
+  }
+
+  function renderGroupedOpenCodeGoCard(workspace, windows) {
+    const card = el("div", { className: "card" });
+    card.appendChild(el("div", { className: "card-title", style: { marginBottom: "10px" } }, "OpenCode Go (" + workspace + ")"));
+
+    // Sort windows: 5h, Weekly, Monthly
+    const order = { "5h": 0, "Weekly": 1, "Monthly": 2 };
+    windows.sort((a, b) => (order[a.window] || 0) - (order[b.window] || 0));
+
+    // Find the shortest reset time across all windows for the status line
+    let shortestReset = "";
+    let shortestDiff = Infinity;
+    for (const w of windows) {
+      if (w.entry.resetTimeIso) {
+        const diff = new Date(w.entry.resetTimeIso) - new Date();
+        if (diff > 0 && diff < shortestDiff) { shortestDiff = diff; }
+      }
+    }
+    if (shortestDiff > 0 && shortestDiff < Infinity) {
+      const h = Math.floor(shortestDiff / 3600000);
+      const m = Math.floor((shortestDiff % 3600000) / 60000);
+      shortestReset = h > 24 ? Math.floor(h / 24) + "d" : h + "h " + m + "m";
+    }
+
+    for (const w of windows) {
+      const pct = Math.max(0, Math.min(100, w.entry.percentRemaining || 0));
+      let barClass = "good";
+      if (pct <= 10) barClass = "danger";
+      else if (pct <= 25) barClass = "warning";
+
+      const row = el("div", { style: { display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" } });
+
+      // Window label
+      row.appendChild(el("span", { style: { width: "52px", fontSize: "10px", color: "var(--text-secondary)", textAlign: "right", flexShrink: "0" } }, w.window));
+
+      // Mini bar
+      const barWrap = el("div", { className: "percent-bar-container", style: { flex: "1", margin: "0", height: "12px" } });
+      barWrap.appendChild(el("div", { className: "percent-bar-fill " + barClass, style: { width: pct + "%" } }));
+      row.appendChild(barWrap);
+
+      // Percentage
+      row.appendChild(el("span", { style: { width: "36px", fontSize: "10px", fontFamily: "var(--font-mono)", textAlign: "right", flexShrink: "0", color: "var(--text-primary)" } }, Math.round(pct) + "%"));
+
+      card.appendChild(row);
+    }
+
+    // Reset countdown
+    if (shortestReset) {
+      card.appendChild(el("div", { style: { marginTop: "6px", fontSize: "10px", color: "var(--text-muted)", textAlign: "right" } }, "⟳ " + shortestReset));
+    }
+
+    return card;
+  }
+
   function renderDashboardInto(container) {
     if (!quotaData) {
       container.appendChild(el("div", { className: "empty-state" },
@@ -238,7 +314,16 @@
     const filterVal = sel.value;
     const filtered = filterVal === "all" ? entries : entries.filter(e => e.name && e.name.toLowerCase().includes(filterVal.toLowerCase()));
 
-    filtered.forEach(entry => {
+    // Group OpenCode Go entries by workspace; render others as individual cards
+    const { groups, others } = groupOpenCodeGoEntries(filtered);
+
+    // Render grouped OpenCode Go cards
+    for (const [workspace, windows] of groups) {
+      container.appendChild(renderGroupedOpenCodeGoCard(workspace, windows));
+    }
+
+    // Render remaining entries as individual cards
+    others.forEach(entry => {
       container.appendChild(renderProviderCard(entry));
     });
 
