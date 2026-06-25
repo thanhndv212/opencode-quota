@@ -479,7 +479,7 @@
       }, w.l));
     });
     filterBar.appendChild(group);
-    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: async () => { try { await api.tokens.syncExport(); showToast("Token usage synced"); } catch(e) { showToast(e.message, "error"); } }, style: { marginLeft: "auto", marginRight: "4px" } }, "↗ Sync"));
+    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: async () => { try { const r = await api.tokens.syncExportAndPush(); showToast(r.pushed ? "Synced & pushed" : "Exported (push skipped)"); } catch(e) { showToast(e.message, "error"); } }, style: { marginLeft: "auto", marginRight: "4px" } }, "↗ Sync"));
     filterBar.appendChild(el("button", { className: "btn btn-small", onClick: () => fetchTokens(), style: {} }, "⟳ Refresh"));
     container.appendChild(filterBar);
 

@@ -174,6 +174,10 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
     return tokensIpc.exportToSync();
   });
 
+  ipcMain.handle("tokens:sync-export-and-push", async () => {
+    return tokensIpc.exportToSyncAndPush();
+  });
+
   ipcMain.handle("tokens:merged", async () => {
     return tokensIpc.loadMergedUsage();
   });

@@ -3,6 +3,9 @@
  * Wraps the existing quota-stats aggregation pipeline.
  */
 
+import { execSync } from "child_process";
+import { dirname } from "path";
+
 import { aggregateUsage, type AggregateResult } from "../../lib/quota-stats.js";
 import { getWindowSinceMs, type BudgetTimeWindow } from "../../lib/budget-alerts.js";
 import type { TokenBuckets } from "../../lib/token-buckets.js";
@@ -206,6 +209,27 @@ export function groupByModel(aggregate: AggregateResult): Map<string, {
  */
 export async function exportToSync(): Promise<SyncedMachineExport> {
   return exportTokenSync();
+}
+
+/**
+ * Export and auto git-commit + push the sync file.
+ */
+export async function exportToSyncAndPush(): Promise<{ exported: SyncedMachineExport; pushed: boolean }> {
+  const exported = await exportTokenSync();
+
+  const syncDir = process.env.OPENCODE_QUOTA_SYNC_DIR;
+  if (!syncDir) return { exported, pushed: false };
+
+  const repoRoot = dirname(dirname(syncDir)); // up from token-sync/ → opencode-quota/ → repo root
+
+  try {
+    execSync("git add opencode-quota/token-sync/", { stdio: "pipe", cwd: repoRoot });
+    execSync(`git commit -m "sync: token usage from ${exported.machine}" --allow-empty`, { stdio: "pipe", cwd: repoRoot });
+    execSync("git push", { stdio: "pipe", cwd: repoRoot });
+    return { exported, pushed: true };
+  } catch {
+    return { exported, pushed: false };
+  }
 }
 
 /**

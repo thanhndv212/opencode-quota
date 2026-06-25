@@ -28,6 +28,7 @@ const quotaApi = {
     }) => ipcRenderer.invoke("tokens:query", params),
     projects: () => ipcRenderer.invoke("tokens:projects"),
     syncExport: () => ipcRenderer.invoke("tokens:sync-export"),
+    syncExportAndPush: () => ipcRenderer.invoke("tokens:sync-export-and-push"),
     merged: () => ipcRenderer.invoke("tokens:merged"),
   },
 
