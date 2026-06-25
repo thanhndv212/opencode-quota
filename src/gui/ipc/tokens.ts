@@ -7,6 +7,7 @@ import { aggregateUsage, type AggregateResult } from "../../lib/quota-stats.js";
 import { getWindowSinceMs, type BudgetTimeWindow } from "../../lib/budget-alerts.js";
 import type { TokenBuckets } from "../../lib/token-buckets.js";
 import { emptyTokenBuckets, addTokenBuckets } from "../../lib/token-buckets.js";
+import { exportTokenSync, loadMergedTokenUsage, type SyncedMachineExport } from "../../lib/token-sync.js";
 
 export interface TokensQueryParams {
   windowMs?: number;
@@ -198,4 +199,18 @@ export function groupByModel(aggregate: AggregateResult): Map<string, {
   }
 
   return map;
+}
+
+/**
+ * Export local token usage to the sync file for cross-machine sharing.
+ */
+export async function exportToSync(): Promise<SyncedMachineExport> {
+  return exportTokenSync();
+}
+
+/**
+ * Load merged token usage from local DB + all synced machine files.
+ */
+export async function loadMergedUsage() {
+  return loadMergedTokenUsage();
 }

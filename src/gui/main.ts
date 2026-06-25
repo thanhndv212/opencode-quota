@@ -170,6 +170,14 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
     return tokensIpc.getProjectsWithUsage();
   });
 
+  ipcMain.handle("tokens:sync-export", async () => {
+    return tokensIpc.exportToSync();
+  });
+
+  ipcMain.handle("tokens:merged", async () => {
+    return tokensIpc.loadMergedUsage();
+  });
+
   // ── Pricing ────────────────────────────────────────
   ipcMain.handle("pricing:list", async () => {
     return pricingIpc.listPricing();

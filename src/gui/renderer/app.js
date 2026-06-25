@@ -479,7 +479,8 @@
       }, w.l));
     });
     filterBar.appendChild(group);
-    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: () => fetchTokens(), style: { marginLeft: "auto" } }, "⟳ Refresh"));
+    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: async () => { try { await api.tokens.syncExport(); showToast("Token usage synced"); } catch(e) { showToast(e.message, "error"); } }, style: { marginLeft: "auto", marginRight: "4px" } }, "↗ Sync"));
+    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: () => fetchTokens(), style: {} }, "⟳ Refresh"));
     container.appendChild(filterBar);
 
     // ── Summary card ─────────────────────────────────
