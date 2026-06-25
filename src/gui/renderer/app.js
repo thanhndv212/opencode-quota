@@ -28,6 +28,7 @@
   let apikeyStatus = null;
   let isLoading = false;
   let toastTimer = null;
+  let showAllModels = false;
 
   // ===========================================================================
   // DOM helpers
@@ -565,12 +566,21 @@
       table.appendChild(thead);
 
       const tbody = el("tbody");
+      let visibleCount = 0;
+      let totalCount = 0;
+      const limit = showAllModels ? Infinity : 10;
+
       for (let si = 0; si < sources.length; si++) {
         const src = sources[si];
         const list = grouped.get(src);
         list.sort((a, b) => ((b.costUsd ?? -1) - (a.costUsd ?? -1)));
 
+        let groupRendered = 0;
         for (const row of list) {
+          totalCount++;
+          if (visibleCount >= limit) continue;
+          visibleCount++;
+          groupRendered++;
           const t = row.tokens || {};
           const tr = el("tr");
           [src,
@@ -588,14 +598,26 @@
           tbody.appendChild(tr);
         }
 
-        // Separator row between sources
-        if (si < sources.length - 1) {
+        // Separator row between sources (only if we rendered from this group and more groups follow)
+        if (groupRendered > 0 && si < sources.length - 1 && visibleCount < limit) {
           const sep = el("tr");
           sep.appendChild(el("td", { colSpan: 9, style: { padding: "2px 0" } }, ""));
           tbody.appendChild(sep);
         }
       }
       table.appendChild(tbody);
+
+      // Header row with count + toggle
+      const titleRow = el("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } });
+      titleRow.appendChild(el("span", {}, ""));
+      if (totalCount > 10) {
+        titleRow.appendChild(el("button", {
+          className: "btn btn-small",
+          onClick: () => { showAllModels = !showAllModels; renderContent(); },
+        }, showAllModels ? "Show less" : "Show all (" + totalCount + " models)"));
+      }
+      modelCard.appendChild(titleRow);
+
       modelCard.appendChild(table);
 
       const unpricedCount = unpriced.length + unknown.length;
