@@ -402,6 +402,46 @@
   // ===========================================================================
   // Token Usage
   // ===========================================================================
+
+  function fmtCompact(n) {
+    if (!Number.isFinite(n)) return "0";
+    const abs = Math.abs(n);
+    const sign = n < 0 ? "-" : "";
+    if (abs >= 1_000_000_000) return sign + (abs / 1_000_000_000).toFixed(1) + "B";
+    if (abs >= 1_000_000) return sign + (abs / 1_000_000).toFixed(1) + "M";
+    if (abs >= 1_000) return sign + (abs / 1_000).toFixed(1) + "K";
+    return String(Math.trunc(n));
+  }
+
+  function fmtUsd(n) {
+    if (!Number.isFinite(n)) return "$0.00";
+    return "$" + n.toFixed(2);
+  }
+
+  function normalizeSourceName(providerID) {
+    const p = (providerID || "").toLowerCase();
+    if (p.includes("opencode")) return "OpenCode";
+    if (p.includes("cursor")) return "Cursor";
+    if (p.includes("claude") || p.includes("anthropic")) return "Claude";
+    if (p.includes("github") || p.includes("copilot")) return "Copilot";
+    if (p.includes("openai") || p.includes("chatgpt") || p.includes("codex")) return "OpenAI";
+    if (p.includes("google") || p.includes("antigravity") || p.includes("gemini")) return "Google";
+    if (p.includes("azure")) return "Azure";
+    return providerID || "Unknown";
+  }
+
+  function sourceSortKey(providerID) {
+    const s = (providerID || "").toLowerCase();
+    if (s === "opencode") return 1;
+    if (s === "claude" || s === "anthropic") return 2;
+    if (s === "cursor") return 3;
+    if (s === "copilot" || s.includes("copilot")) return 4;
+    if (s === "openai") return 5;
+    if (s.includes("google")) return 6;
+    if (s.includes("azure")) return 7;
+    return 99;
+  }
+
   function renderTokenUsageInto(container) {
     if (!tokenData) {
       container.appendChild(el("div", { className: "loading-center" },
@@ -411,7 +451,11 @@
       return;
     }
 
-    // Window selector
+    const agg = tokenData.aggregate || {};
+    const totals = agg.totals || {};
+    const winLabel = tokenData.window?.label || "Usage";
+
+    // ── Window selector ──────────────────────────────
     const filterBar = el("div", { className: "filter-bar" });
     const windows = [{ v: "day", l: "24h" }, { v: "week", l: "7d" }, { v: "month", l: "30d" }, { v: "all", l: "All" }];
     const group = el("div", { className: "filter-group" }, el("span", { className: "filter-label" }, "Window:"));
@@ -423,49 +467,181 @@
       }, w.l));
     });
     filterBar.appendChild(group);
-    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: fetchTokens, style: { marginLeft: "auto" } }, "⟳"));
+    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: fetchTokens, style: { marginLeft: "auto" } }, "⟳ Refresh"));
     container.appendChild(filterBar);
 
-    const agg = tokenData.aggregate || {};
-    const totals = agg.totals || { costUsd: 0, messageCount: 0, priced: {} };
-    const winLabel = tokenData.window?.label || "Usage";
-
-    // Summary card
+    // ── Summary card ─────────────────────────────────
     const summary = el("div", { className: "card" });
     summary.appendChild(el("div", { className: "card-title" }, winLabel));
-    const grid = el("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" } });
-    grid.appendChild(renderKV("Total Cost", "$" + (totals.costUsd || 0).toFixed(4), "var(--accent)"));
+
+    const priced = totals.priced || {};
+    const unknownTok = totals.unknown || {};
+    const unpricedTok = totals.unpriced || {};
+    const hasCache = (priced.cache_read || 0) + (priced.cache_write || 0) > 0;
+    const hasReason = (priced.reasoning || 0) + (unknownTok.reasoning || 0) + (unpricedTok.reasoning || 0) > 0;
+
+    const grid = el("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", marginTop: "6px" } });
     grid.appendChild(renderKV("Messages", formatNumber(totals.messageCount || 0)));
-    grid.appendChild(renderKV("Input Tokens", formatNumber((totals.priced || {}).input || 0)));
-    grid.appendChild(renderKV("Output Tokens", formatNumber((totals.priced || {}).output || 0)));
+    grid.appendChild(renderKV("Sessions", formatNumber(totals.sessionCount || 0)));
+    grid.appendChild(renderKV("Cost", fmtUsd(totals.costUsd), "var(--accent)"));
+    grid.appendChild(renderKV("Input Tokens", fmtCompact(priced.input || 0)));
+    grid.appendChild(renderKV("Output Tokens", fmtCompact(priced.output || 0)));
+    if (hasCache) {
+      grid.appendChild(renderKV("Cache Read", fmtCompact(priced.cache_read || 0)));
+      grid.appendChild(renderKV("Cache Write", fmtCompact(priced.cache_write || 0)));
+    }
+    if (hasReason) {
+      grid.appendChild(renderKV("Reasoning", fmtCompact(priced.reasoning || 0)));
+    }
     summary.appendChild(grid);
     container.appendChild(summary);
 
-    // Top models chart
-    const models = (agg.byModel || []).sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0)).slice(0, 10);
-    if (models.length > 0) {
-      const maxCost = Math.max(...models.map(m => m.costUsd || 0)) || 1;
-      const colors = ["#4c9aff", "#51cf66", "#fcc419", "#ff6b6b", "#c084fc", "#22d3ee", "#f472b6", "#a78bfa", "#fb923c", "#34d399"];
-      const chartCard = el("div", { className: "card" });
-      chartCard.appendChild(el("div", { className: "card-title" }, "Top Models by Cost"));
-      const chart = el("div", { className: "chart-container" });
-      models.forEach((m, i) => {
-        const row = el("div", { className: "chart-bar-row" });
-        row.appendChild(el("span", { className: "chart-bar-label", title: m.key?.model }, m.key?.model || "?"));
-        const track = el("div", { className: "chart-bar-track" });
-        track.appendChild(el("div", { className: "chart-bar-fill", style: { width: ((m.costUsd || 0) / maxCost * 100) + "%", background: colors[i % colors.length] } }));
-        row.appendChild(track);
-        row.appendChild(el("span", { className: "chart-bar-value" }, "$" + (m.costUsd || 0).toFixed(4)));
-        chart.appendChild(row);
+    // ── Models table ─────────────────────────────────
+    const bySourceModel = agg.bySourceModel || [];
+    if (bySourceModel.length > 0) {
+      const grouped = new Map();
+      for (const row of bySourceModel) {
+        const src = normalizeSourceName(row.sourceProviderID);
+        if (!grouped.has(src)) grouped.set(src, []);
+        grouped.get(src).push(row);
+      }
+
+      const sources = [...grouped.keys()].sort((a, b) => {
+        const ka = sourceSortKey(a), kb = sourceSortKey(b);
+        return ka !== kb ? ka - kb : a.localeCompare(b);
       });
-      chartCard.appendChild(chart);
-      container.appendChild(chartCard);
+
+      const modelCard = el("div", { className: "card" });
+      modelCard.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Models"));
+
+      const table = el("table", { className: "data-table" });
+      const thead = el("thead");
+      const hRow = el("tr");
+      ["Source", "Model", "Input", "Output", "C.Read", "C.Write", "Reason", "Total", "Cost"].forEach(h => {
+        hRow.appendChild(el("th", {}, h));
+      });
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      const tbody = el("tbody");
+      for (let si = 0; si < sources.length; si++) {
+        const src = sources[si];
+        const list = grouped.get(src);
+        list.sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0));
+
+        for (const row of list) {
+          const t = row.tokens || {};
+          const tr = el("tr");
+          [src,
+           (row.sourceModelID || "?"),
+           fmtCompact(t.input || 0),
+           fmtCompact(t.output || 0),
+           fmtCompact(t.cache_read || 0),
+           fmtCompact(t.cache_write || 0),
+           fmtCompact(t.reasoning || 0),
+           fmtCompact((t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_write||0)+(t.reasoning||0)),
+           fmtUsd(row.costUsd)
+          ].forEach((v, i) => {
+            tr.appendChild(el("td", { className: i >= 2 && i <= 7 ? "num-col" : i === 8 ? "cost-col" : "text-col" }, v));
+          });
+          tbody.appendChild(tr);
+        }
+
+        // Separator row between sources
+        if (si < sources.length - 1) {
+          const sep = el("tr");
+          sep.appendChild(el("td", { colSpan: 9, style: { padding: "2px 0" } }, ""));
+          tbody.appendChild(sep);
+        }
+      }
+      table.appendChild(tbody);
+      modelCard.appendChild(table);
+      container.appendChild(modelCard);
     }
 
-    // Unpriced warning
-    if ((agg.unpriced || []).length > 0) {
-      container.appendChild(el("div", { className: "alert-indicator triggered" },
-        "⚠ " + agg.unpriced.length + " unpriced models — go to Pricing tab to add custom rates"));
+    // ── Top Sessions ─────────────────────────────────
+    const sessions = (agg.bySession || []).filter(s => (s.costUsd || 0) > 0 || (s.messageCount || 0) > 0);
+    if (sessions.length > 0) {
+      const top = sessions.sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0)).slice(0, 10);
+      const sessCard = el("div", { className: "card" });
+      sessCard.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Top Sessions"));
+
+      const table = el("table", { className: "data-table" });
+      const thead = el("thead");
+      const hRow = el("tr");
+      ["Session", "Cost", "Tokens", "Msgs", "Title"].forEach(h => hRow.appendChild(el("th", {}, h)));
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      const tbody = el("tbody");
+      top.forEach(row => {
+        const tr = el("tr");
+        tr.appendChild(el("td", { className: "text-col", style: { fontFamily: "var(--font-mono)", fontSize: "9px", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis" } }, row.sessionID || "-"));
+        tr.appendChild(el("td", { className: "cost-col" }, fmtUsd(row.costUsd)));
+        tr.appendChild(el("td", { className: "num-col" }, fmtCompact((row.tokens?.input||0)+(row.tokens?.output||0)+(row.tokens?.cache_read||0)+(row.tokens?.cache_write||0)+(row.tokens?.reasoning||0))));
+        tr.appendChild(el("td", { className: "num-col" }, formatNumber(row.messageCount || 0)));
+        tr.appendChild(el("td", { className: "text-col", style: { maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, (row.title || "").trim().slice(0, 30) || "(untitled)"));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      sessCard.appendChild(table);
+      container.appendChild(sessCard);
+    }
+
+    // ── Unpriced Models ──────────────────────────────
+    const unpriced = agg.unpriced || [];
+    if (unpriced.length > 0) {
+      const card = el("div", { className: "card" });
+      card.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Unpriced Models (" + unpriced.length + ")"));
+
+      const table = el("table", { className: "data-table" });
+      const thead = el("thead");
+      const hRow = el("tr");
+      ["Source", "Model", "Tokens", "Msgs"].forEach(h => hRow.appendChild(el("th", {}, h)));
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      const tbody = el("tbody");
+      unpriced.slice(0, 20).forEach(u => {
+        const tr = el("tr");
+        tr.appendChild(el("td", { className: "text-col" }, normalizeSourceName(u.key?.sourceProviderID)));
+        tr.appendChild(el("td", { className: "text-col", style: { fontFamily: "var(--font-mono)", fontSize: "10px" } }, u.key?.sourceModelID || "?"));
+        tr.appendChild(el("td", { className: "num-col" }, fmtCompact((u.tokens?.input||0)+(u.tokens?.output||0))));
+        tr.appendChild(el("td", { className: "num-col" }, formatNumber(u.messageCount || 0)));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      card.appendChild(table);
+      card.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginTop: "8px" } }, "Add custom pricing in the Pricing tab."));
+      container.appendChild(card);
+    }
+
+    // ── Unknown Pricing ──────────────────────────────
+    const unknown = agg.unknown || [];
+    if (unknown.length > 0) {
+      const card = el("div", { className: "card" });
+      card.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Unknown Pricing (" + unknown.length + ")"));
+
+      const table = el("table", { className: "data-table" });
+      const thead = el("thead");
+      const hRow = el("tr");
+      ["Source", "Model", "Tokens", "Msgs"].forEach(h => hRow.appendChild(el("th", {}, h)));
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      const tbody = el("tbody");
+      unknown.slice(0, 20).forEach(u => {
+        const tr = el("tr");
+        tr.appendChild(el("td", { className: "text-col" }, normalizeSourceName(u.key?.sourceProviderID)));
+        tr.appendChild(el("td", { className: "text-col", style: { fontFamily: "var(--font-mono)", fontSize: "10px" } }, u.key?.sourceModelID || "?"));
+        tr.appendChild(el("td", { className: "num-col" }, fmtCompact((u.tokens?.input||0)+(u.tokens?.output||0))));
+        tr.appendChild(el("td", { className: "num-col" }, formatNumber(u.messageCount || 0)));
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      card.appendChild(table);
+      card.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginTop: "8px" } }, "Run /quota_status for full pricing diagnostics."));
+      container.appendChild(card);
     }
   }
 
