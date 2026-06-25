@@ -327,25 +327,27 @@
       return bVal - aVal;
     });
 
-    // Sort individual cards: remaining > 0 first, then value/balance entries, then 0% last
-    const sortedOthers = [...others].sort((a, b) => {
-      const rank = (e) => {
-        if (e.percentRemaining == null) return -9999;                        // value entry — pin to top
-        if (e.percentRemaining > 0) return -e.percentRemaining;              // sort by remaining desc
-        return 100;                                                          // 0% remaining last
-      };
-      return rank(a) - rank(b);
-    });
+    // Merge groups and individual cards into one sorted list
+    const merged = [
+      ...sortedGroups.map(([workspace, windows]) => {
+        const monthly = windows.find(w => w.window === "Monthly")?.entry.percentRemaining;
+        const best = Math.max(...windows.map(w => w.entry.percentRemaining ?? 0));
+        const key = -(monthly ?? best);                                            // negative = sort by remaining desc, groups below value
+        return { type: "group", workspace, windows, sortKey: key };
+      }),
+      ...others.map(entry => ({ type: "card", entry,
+        sortKey: entry.percentRemaining == null ? -9999                           // value entry — pin to top
+          : entry.percentRemaining > 0 ? -entry.percentRemaining                  // remaining desc
+          : 100 })),                                                              // 0% last
+    ].sort((a, b) => a.sortKey - b.sortKey);
 
-    // Render grouped OpenCode Go cards
-    for (const [workspace, windows] of sortedGroups) {
-      container.appendChild(renderGroupedOpenCodeGoCard(workspace, windows));
+    for (const item of merged) {
+      if (item.type === "group") {
+        container.appendChild(renderGroupedOpenCodeGoCard(item.workspace, item.windows));
+      } else {
+        container.appendChild(renderProviderCard(item.entry));
+      }
     }
-
-    // Render remaining entries as individual cards
-    sortedOthers.forEach(entry => {
-      container.appendChild(renderProviderCard(entry));
-    });
 
     if (quotaData.sessionTokens) {
       const st = quotaData.sessionTokens;
