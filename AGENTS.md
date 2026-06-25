@@ -15,6 +15,7 @@ pnpm run typecheck        # tsc --noEmit
 pnpm test                 # vitest run
 pnpm run test:watch       # vitest (watch)
 pnpm run build            # clean-dist → tsc → copy-data → prepare-tui-dist
+pnpm run build:gui        # copies renderer HTML/CSS/JS into dist/gui/renderer/
 pnpm run build:check      # build + pnpm pack --dry-run (CI-like)
 ```
 
