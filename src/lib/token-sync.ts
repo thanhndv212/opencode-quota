@@ -9,8 +9,10 @@
 
 import { readFile, writeFile } from "fs/promises";
 import { readdirSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { hostname } from "os";
+
+import { findGitWorktreeRoot } from "./config-file-utils.js";
 
 import type { TokenBuckets } from "./token-buckets.js";
 import { emptyTokenBuckets, addTokenBuckets } from "./token-buckets.js";
@@ -47,8 +49,8 @@ export interface SyncedMachineExport {
 // =============================================================================
 
 function getTokenSyncDir(): string {
-  const cwd = process.cwd();
-  const dir = join(cwd, "opencode-quota", SYNC_DIRNAME);
+  const worktree = findGitWorktreeRoot(process.cwd()) ?? process.cwd();
+  const dir = join(worktree, "opencode-quota", SYNC_DIRNAME);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
