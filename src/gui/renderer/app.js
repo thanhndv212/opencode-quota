@@ -507,11 +507,41 @@
     summary.appendChild(grid);
     container.appendChild(summary);
 
-    // ── Models table ─────────────────────────────────
+    // ── Models table (priced + unpriced + unknown) ───
     const bySourceModel = agg.bySourceModel || [];
-    if (bySourceModel.length > 0) {
+    const unpriced = agg.unpriced || [];
+    const unknown = agg.unknown || [];
+
+    const allModels = [
+      ...bySourceModel.map(row => ({
+        sourceProviderID: row.sourceProviderID,
+        sourceModelID: row.sourceModelID,
+        tokens: row.tokens || {},
+        costUsd: row.costUsd,
+        messageCount: row.messageCount,
+        priced: true,
+      })),
+      ...unpriced.map(u => ({
+        sourceProviderID: u.key?.sourceProviderID || "?",
+        sourceModelID: u.key?.sourceModelID || "?",
+        tokens: u.tokens || {},
+        costUsd: null,
+        messageCount: u.messageCount || 0,
+        priced: false,
+      })),
+      ...unknown.map(u => ({
+        sourceProviderID: u.key?.sourceProviderID || "?",
+        sourceModelID: u.key?.sourceModelID || "?",
+        tokens: u.tokens || {},
+        costUsd: null,
+        messageCount: u.messageCount || 0,
+        priced: false,
+      })),
+    ];
+
+    if (allModels.length > 0) {
       const grouped = new Map();
-      for (const row of bySourceModel) {
+      for (const row of allModels) {
         const src = normalizeSourceName(row.sourceProviderID);
         if (!grouped.has(src)) grouped.set(src, []);
         grouped.get(src).push(row);
@@ -538,7 +568,7 @@
       for (let si = 0; si < sources.length; si++) {
         const src = sources[si];
         const list = grouped.get(src);
-        list.sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0));
+        list.sort((a, b) => ((b.costUsd ?? -1) - (a.costUsd ?? -1)));
 
         for (const row of list) {
           const t = row.tokens || {};
@@ -551,7 +581,7 @@
            fmtCompact(t.cache_write || 0),
            fmtCompact(t.reasoning || 0),
            fmtCompact((t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_write||0)+(t.reasoning||0)),
-           fmtUsd(row.costUsd)
+           row.priced ? fmtUsd(row.costUsd) : "N/A"
           ].forEach((v, i) => {
             tr.appendChild(el("td", { className: i >= 2 && i <= 7 ? "num-col" : i === 8 ? "cost-col" : "text-col" }, v));
           });
@@ -567,6 +597,11 @@
       }
       table.appendChild(tbody);
       modelCard.appendChild(table);
+
+      const unpricedCount = unpriced.length + unknown.length;
+      if (unpricedCount > 0) {
+        modelCard.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginTop: "8px" } }, unpricedCount + " model(s) without pricing — add custom rates in Pricing tab."));
+      }
       container.appendChild(modelCard);
     }
 
@@ -597,62 +632,6 @@
       table.appendChild(tbody);
       sessCard.appendChild(table);
       container.appendChild(sessCard);
-    }
-
-    // ── Unpriced Models ──────────────────────────────
-    const unpriced = agg.unpriced || [];
-    if (unpriced.length > 0) {
-      const card = el("div", { className: "card" });
-      card.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Unpriced Models (" + unpriced.length + ")"));
-
-      const table = el("table", { className: "data-table" });
-      const thead = el("thead");
-      const hRow = el("tr");
-      ["Source", "Model", "Tokens", "Msgs"].forEach(h => hRow.appendChild(el("th", {}, h)));
-      thead.appendChild(hRow);
-      table.appendChild(thead);
-
-      const tbody = el("tbody");
-      unpriced.slice(0, 20).forEach(u => {
-        const tr = el("tr");
-        tr.appendChild(el("td", { className: "text-col" }, normalizeSourceName(u.key?.sourceProviderID)));
-        tr.appendChild(el("td", { className: "text-col", style: { fontFamily: "var(--font-mono)", fontSize: "10px" } }, u.key?.sourceModelID || "?"));
-        tr.appendChild(el("td", { className: "num-col" }, fmtCompact((u.tokens?.input||0)+(u.tokens?.output||0))));
-        tr.appendChild(el("td", { className: "num-col" }, formatNumber(u.messageCount || 0)));
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      card.appendChild(table);
-      card.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginTop: "8px" } }, "Add custom pricing in the Pricing tab."));
-      container.appendChild(card);
-    }
-
-    // ── Unknown Pricing ──────────────────────────────
-    const unknown = agg.unknown || [];
-    if (unknown.length > 0) {
-      const card = el("div", { className: "card" });
-      card.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "Unknown Pricing (" + unknown.length + ")"));
-
-      const table = el("table", { className: "data-table" });
-      const thead = el("thead");
-      const hRow = el("tr");
-      ["Source", "Model", "Tokens", "Msgs"].forEach(h => hRow.appendChild(el("th", {}, h)));
-      thead.appendChild(hRow);
-      table.appendChild(thead);
-
-      const tbody = el("tbody");
-      unknown.slice(0, 20).forEach(u => {
-        const tr = el("tr");
-        tr.appendChild(el("td", { className: "text-col" }, normalizeSourceName(u.key?.sourceProviderID)));
-        tr.appendChild(el("td", { className: "text-col", style: { fontFamily: "var(--font-mono)", fontSize: "10px" } }, u.key?.sourceModelID || "?"));
-        tr.appendChild(el("td", { className: "num-col" }, fmtCompact((u.tokens?.input||0)+(u.tokens?.output||0))));
-        tr.appendChild(el("td", { className: "num-col" }, formatNumber(u.messageCount || 0)));
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      card.appendChild(table);
-      card.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginTop: "8px" } }, "Run /quota_status for full pricing diagnostics."));
-      container.appendChild(card);
     }
   }
 
