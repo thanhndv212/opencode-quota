@@ -89,11 +89,10 @@
     renderContent();
   }
 
-  async function fetchTokens() {
+  async function fetchTokens(explicitWindow) {
     setLoading(true);
     try {
-      const activeBtn = $(".token-window-select.btn-primary");
-      const window = activeBtn?.getAttribute("data-window") || "week";
+      const window = explicitWindow || "week";
       tokenData = await api.tokens.query({ window });
     } catch (e) {
       showToast(e.message, "error");
@@ -459,15 +458,16 @@
     const filterBar = el("div", { className: "filter-bar" });
     const windows = [{ v: "day", l: "24h" }, { v: "week", l: "7d" }, { v: "month", l: "30d" }, { v: "all", l: "All" }];
     const group = el("div", { className: "filter-group" }, el("span", { className: "filter-label" }, "Window:"));
+    const activeWindow = tokenData.window?.label || "";
     windows.forEach(w => {
+      const isActive = activeWindow.includes(w.l);
       group.appendChild(el("button", {
-        className: "btn btn-small token-window-select " + ((tokenData?.window?.label || "").includes(w.l) ? "btn-primary" : ""),
-        onClick: () => { fetchTokens(); },
-        "data-window": w.v,
+        className: "btn btn-small token-window-select " + (isActive ? "btn-primary" : ""),
+        onClick: () => { fetchTokens(w.v); },
       }, w.l));
     });
     filterBar.appendChild(group);
-    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: fetchTokens, style: { marginLeft: "auto" } }, "⟳ Refresh"));
+    filterBar.appendChild(el("button", { className: "btn btn-small", onClick: () => fetchTokens(), style: { marginLeft: "auto" } }, "⟳ Refresh"));
     container.appendChild(filterBar);
 
     // ── Summary card ─────────────────────────────────
