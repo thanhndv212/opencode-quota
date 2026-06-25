@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://github.com/slkiser/opencode-quota">
+  <a href="https://github.com/thanhndv212/opencode-quota">
     <picture>
       <source srcset="opencode-quota-logo-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="opencode-quota-logo-light.svg" media="(prefers-color-scheme: light)">
@@ -11,11 +11,11 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/@slkiser/opencode-quota"><img alt="npm" src="https://img.shields.io/npm/v/%40slkiser%2Fopencode-quota?style=flat-square" /></a>
   <a href="https://www.npmjs.com/package/@slkiser/opencode-quota"><img alt="npm downloads" src="https://img.shields.io/npm/dm/%40slkiser%2Fopencode-quota?style=flat-square" /></a>
-  <a href="https://github.com/slkiser/opencode-quota/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/slkiser/opencode-quota/ci.yml?style=flat-square&branch=main&label=CI" /></a>
+  <a href="https://github.com/thanhndv212/opencode-quota/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/thanhndv212/opencode-quota/ci.yml?style=flat-square&branch=main&label=CI" /></a>
   <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square" /></a>
 </p>
 
-[![OpenCode Quota sidebar](https://shawnkiser.com/opencode-quota/opencode-quota-sidebar.webp)](https://github.com/slkiser/opencode-quota)
+[![OpenCode Quota sidebar](https://shawnkiser.com/opencode-quota/opencode-quota-sidebar.webp)](https://github.com/thanhndv212/opencode-quota)
 
 ---
 
@@ -220,18 +220,20 @@ Launch a standalone desktop tray app for visualizing quota, token usage, pricing
 opencode-quota gui
 ```
 
-This spawns Electron from your `node_modules` or `PATH`. If Electron isn't found, install it first: `npm install -g electron`
+This spawns Electron from your `node_modules` or `PATH`. If Electron isn't found, install it first: `npm install -g electron`.
+
+On **Linux**, `--no-sandbox` is auto-appended unless you already pass it via `ELECTRON_ARGS`. The GUI main process also enables `--no-sandbox` automatically on Linux. If your system tray is unsupported (e.g. vanilla Gnome, Wayland without AppIndicator), the app falls back to window-only mode.
 
 ### Install as a desktop app
 
 #### macOS
 
-Download the latest `.dmg` from [GitHub Releases](https://github.com/slkiser/opencode-quota/releases), open it, and drag **OpenCode Quota** to `/Applications`.
+Download the latest `.dmg` from [GitHub Releases](https://github.com/thanhndv212/opencode-quota/releases), open it, and drag **OpenCode Quota** to `/Applications`.
 
 Or build from source:
 
 ```bash
-git clone https://github.com/slkiser/opencode-quota
+git clone https://github.com/thanhndv212/opencode-quota
 cd opencode-quota
 npm install
 npm run build:package:mac
@@ -242,30 +244,59 @@ The app lives in your **menubar** (top-right). Click the tray icon to open the q
 
 #### Linux
 
-Download the latest `.AppImage` from [GitHub Releases](https://github.com/slkiser/opencode-quota/releases):
+**Install a prebuilt package** from [GitHub Releases](https://github.com/thanhndv212/opencode-quota/releases):
 
+**.AppImage** (portable, no root needed):
 ```bash
 chmod +x OpenCode-Quota-*.AppImage
 ./OpenCode-Quota-*.AppImage
 ```
 
-Or install the `.deb` package:
-
+**.deb** (system-wide install):
 ```bash
 sudo dpkg -i opencode-quota_*.deb
 ```
 
-Or build from source:
+The app runs in your **system tray**. Click the icon to open the quota dashboard. If your desktop environment does not support system trays (e.g. vanilla Gnome, bare Wayland compositor), the app falls back to window-only mode automatically.
+
+**Build from source:**
 
 ```bash
-git clone https://github.com/slkiser/opencode-quota
+git clone https://github.com/thanhndv212/opencode-quota
 cd opencode-quota
-npm install
-npm run build:package:linux
-# Output in release/
+corepack enable
+pnpm install
+pnpm run build           # compiles TypeScript
+pnpm run build:gui       # copies renderer files
+pnpm run build:icons     # generates app icons
+pnpm run build:package:linux
+# Output in release/  (AppImage, deb)
 ```
 
-The app lives in your **system tray**. Click the icon to open the quota dashboard.
+**Run from source (no packaging):**
+
+```bash
+pnpm run build
+pnpm run build:gui
+opencode-quota gui
+# or directly: npx electron dist/gui/main.js
+```
+
+The CLI auto-detects Linux and appends `--no-sandbox`. You can pass extra Electron flags with `ELECTRON_ARGS`:
+
+```bash
+ELECTRON_ARGS="--disable-gpu --enable-features=WaylandWindowDecorations" opencode-quota gui
+```
+
+**Linux-specific notes:**
+
+| Concern | What happens |
+| --- | --- |
+| Sandbox | `--no-sandbox` is auto-appended by both the CLI and the main process on Linux. |
+| System tray missing | The app detects tray creation failure and switches to window-only mode. |
+| Wayland | Electron defaults to XWayland. Force native Wayland with `ELECTRON_ARGS="--ozone-platform-hint=auto --enable-features=WaylandWindowDecorations"`. |
+| Headless / no display | The app requires a running display server (X11 or Wayland). Use `xvfb-run` in CI or headless environments. |
+| `better-sqlite3` native module | Not required — the app uses Node.js 22's built-in `node:sqlite` by default. If your Node runtime is older, install `better-sqlite3` as an optional dependency. |
 
 | Tab | What it shows |
 | --- | --- |
@@ -1083,8 +1114,8 @@ Run `/quota_status` and check pricing snapshot health plus OpenCode database pat
 
 Thanks to everyone who has contributed to OpenCode Quota.
 
-<a href="https://github.com/slkiser/opencode-quota/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=slkiser/opencode-quota" />
+<a href="https://github.com/thanhndv212/opencode-quota/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=thanhndv212/opencode-quota" />
 </a>
 
 ## License
@@ -1097,4 +1128,4 @@ OpenCode Quota is not built by the OpenCode team and is not affiliated with Open
 
 ## Star history
 
-[![Star History Chart](https://api.star-history.com/chart?repos=slkiser/opencode-quota&type=date&legend=bottom-right)](https://www.star-history.com/?repos=slkiser%2Fopencode-quota&type=date&legend=bottom-right)
+[![Star History Chart](https://api.star-history.com/chart?repos=thanhndv212/opencode-quota&type=date&legend=bottom-right)](https://www.star-history.com/?repos=thanhndv212%2Fopencode-quota&type=date&legend=bottom-right)

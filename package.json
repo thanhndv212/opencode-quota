@@ -74,12 +74,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/slkiser/opencode-quota.git"
+    "url": "git+https://github.com/thanhndv212/opencode-quota.git"
   },
   "bugs": {
-    "url": "https://github.com/slkiser/opencode-quota/issues"
+    "url": "https://github.com/thanhndv212/opencode-quota/issues"
   },
-  "homepage": "https://github.com/slkiser/opencode-quota#readme",
+  "homepage": "https://github.com/thanhndv212/opencode-quota#readme",
   "devDependencies": {
     "@opencode-ai/plugin": "^1.4.3",
     "@types/node": "^22.0.0",

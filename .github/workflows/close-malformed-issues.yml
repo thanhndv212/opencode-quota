@@ -240,7 +240,7 @@ jobs:
               "",
               "You may also add the missing details in a follow-up comment and ping @slkiser to request a manual reopen.",
               "",
-              "You can open a new issue here: https://github.com/slkiser/opencode-quota/issues/new/choose"
+              "You can open a new issue here: https://github.com/thanhndv212/opencode-quota/issues/new/choose"
             ].join("\n");
 
             await github.rest.issues.createComment({
