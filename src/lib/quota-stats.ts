@@ -15,6 +15,7 @@ import {
   listProvidersForModelId,
   lookupCost,
 } from "./modelsdev-pricing.js";
+import { lookupUserCostSync } from "./user-pricing.js";
 import {
   isCursorModelId,
   isCursorProviderId,
@@ -58,7 +59,8 @@ export type PricingResolution =
         | "unique_model"
         | "alias_fallback"
         | "cursor_local"
-        | "cursor_api_alias";
+        | "cursor_api_alias"
+        | "user_override";
     }
   | { ok: false; unknown: UnknownKey };
 
@@ -456,6 +458,16 @@ export function resolvePricingKey(source: {
     };
   }
 
+  // Check user pricing overrides before giving up
+  const userRates = lookupUserCostSync(srcProvider, normalizedModel);
+  if (userRates) {
+    return {
+      ok: true,
+      key: { provider: srcProvider, model: normalizedModel },
+      method: "user_override",
+    };
+  }
+
   return {
     ok: false,
     unknown: {
@@ -476,7 +488,7 @@ function calculateCostUsd(params: {
   const cost =
     params.provider === "cursor"
       ? lookupCursorLocalCost(params.model)
-      : lookupCost(params.provider, params.model);
+      : lookupUserCostSync(params.provider, params.model) ?? lookupCost(params.provider, params.model);
   if (!cost) return { ok: false };
   return { ok: true, costUsd: calculateUsdFromTokenBuckets(cost, params.tokens) };
 }
