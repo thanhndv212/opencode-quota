@@ -155,7 +155,18 @@
     }
   }
 
-  function renderContent() { renderContentInto($(".tab-content")); }
+  function renderContent() {
+    updateTabNavHighlight();
+    renderContentInto($(".tab-content"));
+  }
+
+  function updateTabNavHighlight() {
+    const btns = $$(".tab-btn");
+    btns.forEach((btn, i) => {
+      if (i === activeTab) btn.classList.add("active");
+      else btn.classList.remove("active");
+    });
+  }
 
   // ===========================================================================
   // Header
