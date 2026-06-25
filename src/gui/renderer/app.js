@@ -593,8 +593,20 @@
            fmtCompact((t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_write||0)+(t.reasoning||0)),
            row.priced ? fmtUsd(row.costUsd) : "N/A"
           ].forEach((v, i) => {
-            tr.appendChild(el("td", { className: i >= 2 && i <= 7 ? "num-col" : i === 8 ? "cost-col" : "text-col" }, v));
+            tr.appendChild(el("td", { className: i >= 2 && i <= 7 ? "num-col" : i === 8 ? (row.priced ? "cost-col" : "cost-col cost-na") : "text-col" }, v));
           });
+          if (!row.priced) {
+            tr.style.cursor = "pointer";
+            tr.title = "Click to add pricing for " + row.sourceProviderID + "/" + row.sourceModelID;
+            tr.addEventListener("click", () => {
+              activeTab = 3;
+              updateHeaderTitle();
+              updateTabNavHighlight();
+              renderContentInto($(".tab-content"));
+              loadPricing();
+              showAddPricingModal(row.sourceProviderID, row.sourceModelID);
+            });
+          }
           tbody.appendChild(tr);
         }
 
@@ -796,14 +808,14 @@
 
   function renderPricing() { const c = $(".tab-content"); if (c) { clear(c); renderPricingInto(c); } }
 
-  function showAddPricingModal() {
+  function showAddPricingModal(provider, model) {
     const overlay = el("div", { className: "modal-overlay", onClick: e => { if (e.target === overlay) overlay.remove(); } });
     const modal = el("div", { className: "modal" });
     modal.appendChild(el("div", { className: "modal-title" }, "Add Pricing Override"));
-    const vals = {};
+    const vals = { provider: provider || "", model: model || "" };
     [
-      ["Provider", "text", "provider", ""],
-      ["Model", "text", "model", ""],
+      ["Provider", "text", "provider", provider || ""],
+      ["Model", "text", "model", model || ""],
       ["Input ($/1M tokens)", "number", "input", ""],
       ["Output ($/1M tokens)", "number", "output", ""],
       ["Cache Read ($/1M)", "number", "cache_read", ""],
@@ -814,7 +826,9 @@
       vals[key] = def;
       const g = el("div", { className: "form-group" });
       g.appendChild(el("label", { className: "form-label" }, label));
-      g.appendChild(el("input", { className: "form-input", type: type, placeholder: "", onInput: e => vals[key] = type === "number" ? e.target.value : e.target.value }));
+      const input = el("input", { className: "form-input", type: type, placeholder: "", onInput: e => vals[key] = type === "number" ? e.target.value : e.target.value });
+      if (def) input.value = def;
+      g.appendChild(input);
       modal.appendChild(g);
     });
     const actions = el("div", { className: "modal-actions" });

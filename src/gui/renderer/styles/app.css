@@ -311,6 +311,17 @@ html, body {
   background: var(--bg-hover);
 }
 
+.data-table .cost-na {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: pointer;
+}
+
+.data-table .cost-na:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .data-table .text-col {
   font-family: var(--font-sans);
 }
