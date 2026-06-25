@@ -645,7 +645,7 @@
     }
   }
 
-  function renderTokenUsage() { renderTokenUsageInto($(".tab-content")); }
+  function renderTokenUsage() { const c = $(".tab-content"); if (c) { clear(c); renderTokenUsageInto(c); } }
 
   // ===========================================================================
   // Budget Alerts
@@ -681,7 +681,7 @@
     });
   }
 
-  function renderAlerts() { renderAlertsInto($(".tab-content")); }
+  function renderAlerts() { const c = $(".tab-content"); if (c) { clear(c); renderAlertsInto(c); } }
 
   async function deleteAlert(id) {
     try { await api.alerts.delete(id); showToast("Alert deleted"); await loadAlerts(); } catch (e) { showToast(e.message, "error"); }
@@ -782,7 +782,7 @@
     });
   }
 
-  function renderPricing() { renderPricingInto($(".tab-content")); }
+  function renderPricing() { const c = $(".tab-content"); if (c) { clear(c); renderPricingInto(c); } }
 
   function showAddPricingModal() {
     const overlay = el("div", { className: "modal-overlay", onClick: e => { if (e.target === overlay) overlay.remove(); } });
@@ -887,7 +887,7 @@
     }
   }
 
-  function renderApiKeys() { renderApiKeysInto($(".tab-content")); }
+  function renderApiKeys() { const c = $(".tab-content"); if (c) { clear(c); renderApiKeysInto(c); } }
 
   function showInitStoreModal() {
     showPassphraseModal("Create API Key Store", "Set a master passphrase to encrypt your API keys at rest.", async (pass) => {
