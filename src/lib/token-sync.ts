@@ -1,10 +1,10 @@
 /**
  * Cross-machine token usage sync via git.
  *
- * Each machine exports its aggregate token counts (keyed by session ID
- * for deduplication) to `token-sync/<hostname>.json`.  Git syncs these
- * files between machines.  When reading token usage, we merge all
- * synced files with the local database, deduplicating by session ID.
+ * Each machine exports per-session token counts to `token-sync/<hostname>.json`.
+ * Git syncs these files between machines.  On import, sessions already in the
+ * local database are skipped — only truly new sessions are counted, so merging
+ * is additive and non-duplicating.
  */
 
 import { readFile, writeFile } from "fs/promises";
@@ -30,18 +30,26 @@ import { lookupCost } from "./modelsdev-pricing.js";
 // =============================================================================
 
 const SYNC_DIRNAME = "token-sync";
-const SYNC_VERSION = 1;
+const SYNC_VERSION = 2;
+
+/** Per-session token record — compact for git-friendly diffs */
+interface SyncedSessionRecord {
+  /** provider/model key (e.g. "deepseek/deepseek-v4-pro") */
+  k: string;
+  /** raw tokens from the single message (we aggregate per-session before writing) */
+  i: number;  // input
+  o: number;  // output
+  r?: number; // reasoning
+  cr?: number; // cache_read
+  cw?: number; // cache_write
+}
 
 export interface SyncedMachineExport {
-  version: typeof SYNC_VERSION;
+  version: 2;
   machine: string;
   exportedAt: number;
-  totals: TokenBuckets & { messages: number; costUsd: number };
-  byProviderModel: Record<
-    string,
-    { provider: string; model: string; tokens: TokenBuckets; messages: number; costUsd: number }
-  >;
-  sessionIDs: string[];
+  /** Map of sessionID → aggregated token record (one per session) */
+  sessions: Record<string, SyncedSessionRecord>;
 }
 
 // =============================================================================
@@ -49,7 +57,6 @@ export interface SyncedMachineExport {
 // =============================================================================
 
 function getTokenSyncDir(): string {
-  // Allow override via env var for repo-based syncing
   if (process.env.OPENCODE_QUOTA_SYNC_DIR) {
     return process.env.OPENCODE_QUOTA_SYNC_DIR;
   }
@@ -68,64 +75,48 @@ function getMachineFileName(): string {
 // Export
 // =============================================================================
 
-/** Export this machine's token usage to the sync file for git sharing. */
+/**
+ * Export this machine's token usage — one record per session for precise
+ * deduplication on the receiving end.
+ */
 export async function exportTokenSync(): Promise<SyncedMachineExport> {
   const messages = await iterAssistantMessages({});
   const sessionsIdx = await readAllSessionsIndex();
 
-  const byProviderModel = new Map<
-    string,
-    { provider: string; model: string; tokens: TokenBuckets; messages: number; costUsd: number }
-  >();
-  let totals: TokenBuckets & { messages: number; costUsd: number } = {
-    ...emptyTokenBuckets(),
-    messages: 0,
-    costUsd: 0,
-  };
-  const sessionIDs: string[] = [];
+  // Aggregate tokens per session (sessions may have multiple assistant messages)
+  const sessions = new Map<string, SyncedSessionRecord>();
 
   for (const msg of messages) {
     const tokens = extractTokens(msg);
     if (!tokens) continue;
 
-    const provider = msg.providerID ?? "unknown";
-    const model = msg.modelID ?? "unknown";
-    const key = `${provider}/${model}`;
-
-    const costRates =
-      lookupUserCostSync(provider, model) ?? lookupCost(provider, model) ?? undefined;
-    const costUsd = costRates ? calculateUsdFromTokenBuckets(costRates, tokens) : 0;
-
-    // Per-model aggregate
-    const existing = byProviderModel.get(key);
+    const sid = msg.sessionID;
+    const existing = sessions.get(sid);
     if (existing) {
-      existing.tokens = addTokenBuckets(existing.tokens, tokens);
-      existing.messages += 1;
-      existing.costUsd += costUsd;
+      existing.i += tokens.input ?? 0;
+      existing.o += tokens.output ?? 0;
+      existing.r = (existing.r ?? 0) + (tokens.reasoning ?? 0);
+      existing.cr = (existing.cr ?? 0) + (tokens.cache_read ?? 0);
+      existing.cw = (existing.cw ?? 0) + (tokens.cache_write ?? 0);
     } else {
-      byProviderModel.set(key, { provider, model, tokens, messages: 1, costUsd });
+      const provider = msg.providerID ?? "unknown";
+      const model = msg.modelID ?? "unknown";
+      sessions.set(sid, {
+        k: `${provider}/${model}`,
+        i: tokens.input ?? 0,
+        o: tokens.output ?? 0,
+        r: (tokens.reasoning ?? 0) || undefined,
+        cr: (tokens.cache_read ?? 0) || undefined,
+        cw: (tokens.cache_write ?? 0) || undefined,
+      });
     }
-
-    // Totals
-    totals = {
-      ...addTokenBuckets(totals, tokens),
-      messages: totals.messages + 1,
-      costUsd: totals.costUsd + costUsd,
-    };
-  }
-
-  // Gather session IDs
-  for (const sid of Object.keys(sessionsIdx)) {
-    sessionIDs.push(sid);
   }
 
   const export_: SyncedMachineExport = {
-    version: SYNC_VERSION,
+    version: 2,
     machine: hostname(),
     exportedAt: Date.now(),
-    totals,
-    byProviderModel: Object.fromEntries(byProviderModel),
-    sessionIDs,
+    sessions: Object.fromEntries(sessions),
   };
 
   const filePath = join(getTokenSyncDir(), getMachineFileName());
@@ -139,9 +130,7 @@ export async function exportTokenSync(): Promise<SyncedMachineExport> {
 // =============================================================================
 
 export interface MergedTokenData {
-  /** Combined totals across all machines */
   totals: { tokens: TokenBuckets; messages: number; costUsd: number };
-  /** Per (provider/model) aggregates across all machines */
   byProviderModel: Array<{
     provider: string;
     model: string;
@@ -149,17 +138,17 @@ export interface MergedTokenData {
     messages: number;
     costUsd: number;
   }>;
-  /** Sessions contributed by OTHER machines (already deduped) */
   remoteSessionCount: number;
-  /** Total distinct session count */
   totalSessionCount: number;
 }
 
 /**
  * Read all synced machine exports and merge with local data.
  *
- * Deduplicates by session ID — sessions already in the local database are
- * skipped for remote machines, so counts are additive and non-duplicating.
+ * Deduplication: a session is counted only once.  Sessions already present
+ * in the local database are skipped in remote machines' exports.  Each
+ * remote machine contributes only sessions that are truly new to this
+ * machine — so multiple syncs never double-count.
  */
 export async function loadMergedTokenUsage(): Promise<MergedTokenData> {
   // 1. Aggregate local data
@@ -178,31 +167,7 @@ export async function loadMergedTokenUsage(): Promise<MergedTokenData> {
   };
 
   for (const msg of messages) {
-    const tokens = extractTokens(msg);
-    if (!tokens) continue;
-
-    const provider = msg.providerID ?? "unknown";
-    const model = msg.modelID ?? "unknown";
-    const key = `${provider}/${model}`;
-
-    const costRates =
-      lookupUserCostSync(provider, model) ?? lookupCost(provider, model) ?? undefined;
-    const costUsd = costRates ? calculateUsdFromTokenBuckets(costRates, tokens) : 0;
-
-    const existing = byProviderModel.get(key);
-    if (existing) {
-      existing.tokens = addTokenBuckets(existing.tokens, tokens);
-      existing.messages += 1;
-      existing.costUsd += costUsd;
-    } else {
-      byProviderModel.set(key, { provider, model, tokens, messages: 1, costUsd });
-    }
-
-    totals = {
-      ...addTokenBuckets(totals, tokens),
-      messages: totals.messages + 1,
-      costUsd: totals.costUsd + costUsd,
-    };
+    accumulateMessage(msg, byProviderModel, totals);
   }
 
   // 2. Read synced machine files
@@ -212,56 +177,50 @@ export async function loadMergedTokenUsage(): Promise<MergedTokenData> {
   if (existsSync(syncDir)) {
     for (const entry of readdirSync(syncDir)) {
       if (!entry.endsWith(".json")) continue;
-
-      // Skip own machine's file — we already aggregated locally
       if (entry === getMachineFileName()) continue;
 
       try {
         const raw = await readFile(join(syncDir, entry), "utf-8");
         const data: SyncedMachineExport = JSON.parse(raw);
 
-        // Deduplicate: count sessions NOT already in local DB
-        const newSessions = data.sessionIDs.filter((sid) => !localSessionIDs.has(sid));
-        if (newSessions.length === 0) continue;
+        // v1 format: skip (superseded by v2 per-session records)
+        if (data.version !== 2) continue;
 
-        // The remote aggregate represents ALL sessions on that machine.
-        // We scale down: only count the proportion of sessions that aren't local.
-        // But this is an approximation — we can't know per-session breakdowns
-        // from the aggregate export. For accurate merging we'd need per-session data.
-        //
-        // For now: if there are new sessions, count the full remote aggregate
-        // (best-effort — assumes most sessions are unique across machines).
-        const ratio = data.sessionIDs.length > 0
-          ? newSessions.length / data.sessionIDs.length
-          : 1;
+        // Count only sessions NOT already in local DB — precise dedup
+        for (const [sid, rec] of Object.entries(data.sessions)) {
+          if (localSessionIDs.has(sid)) continue;
 
-        remoteSessionCount += newSessions.length;
+          remoteSessionCount++;
+          const [provider, model] = rec.k.split("/", 2);
 
-        // Merge byProviderModel
-        for (const [key, remote] of Object.entries(data.byProviderModel || {})) {
-          const scaledTokens = scaleTokenBuckets(remote.tokens, ratio);
+          const tokens = {
+            input: rec.i,
+            output: rec.o,
+            reasoning: rec.r,
+            cache_read: rec.cr,
+            cache_write: rec.cw,
+          } as TokenBuckets;
+
+          const costRates =
+            lookupUserCostSync(provider, model) ?? lookupCost(provider, model) ?? undefined;
+          const costUsd = costRates ? calculateUsdFromTokenBuckets(costRates, tokens) : 0;
+
+          const key = `${provider}/${model}`;
           const existing = byProviderModel.get(key);
           if (existing) {
-            existing.tokens = addTokenBuckets(existing.tokens, scaledTokens);
-            existing.messages += Math.round(remote.messages * ratio);
-            existing.costUsd += remote.costUsd * ratio;
+            existing.tokens = addTokenBuckets(existing.tokens, tokens);
+            existing.messages += 1;
+            existing.costUsd += costUsd;
           } else {
-            byProviderModel.set(key, {
-              provider: remote.provider,
-              model: remote.model,
-              tokens: scaledTokens,
-              messages: Math.round(remote.messages * ratio),
-              costUsd: remote.costUsd * ratio,
-            });
+            byProviderModel.set(key, { provider, model, tokens, messages: 1, costUsd });
           }
-        }
 
-        // Merge totals
-        totals = {
-          ...addTokenBuckets(totals, scaleTokenBuckets(data.totals, ratio)),
-          messages: totals.messages + Math.round(data.totals.messages * ratio),
-          costUsd: totals.costUsd + data.totals.costUsd * ratio,
-        };
+          totals = {
+            ...addTokenBuckets(totals, tokens),
+            messages: totals.messages + 1,
+            costUsd: totals.costUsd + costUsd,
+          };
+        }
       } catch {
         // Skip corrupted files
       }
@@ -292,12 +251,37 @@ function extractTokens(msg: OpenCodeMessage): TokenBuckets | null {
   return { input, output, cache_read: cacheRead, cache_write: cacheWrite, reasoning };
 }
 
-function scaleTokenBuckets(tokens: TokenBuckets, ratio: number): TokenBuckets {
-  return {
-    input: Math.round((tokens.input ?? 0) * ratio),
-    output: Math.round((tokens.output ?? 0) * ratio),
-    cache_read: Math.round((tokens.cache_read ?? 0) * ratio),
-    cache_write: Math.round((tokens.cache_write ?? 0) * ratio),
-    reasoning: Math.round((tokens.reasoning ?? 0) * ratio),
-  };
+function accumulateMessage(
+  msg: OpenCodeMessage,
+  byProviderModel: Map<string, { provider: string; model: string; tokens: TokenBuckets; messages: number; costUsd: number }>,
+  totals: TokenBuckets & { messages: number; costUsd: number },
+): void {
+  const tokens = extractTokens(msg);
+  if (!tokens) return;
+
+  const provider = msg.providerID ?? "unknown";
+  const model = msg.modelID ?? "unknown";
+  const key = `${provider}/${model}`;
+
+  const costRates =
+    lookupUserCostSync(provider, model) ?? lookupCost(provider, model) ?? undefined;
+  const costUsd = costRates ? calculateUsdFromTokenBuckets(costRates, tokens) : 0;
+
+  const existing = byProviderModel.get(key);
+  if (existing) {
+    existing.tokens = addTokenBuckets(existing.tokens, tokens);
+    existing.messages += 1;
+    existing.costUsd += costUsd;
+  } else {
+    byProviderModel.set(key, { provider, model, tokens, messages: 1, costUsd });
+  }
+
+  // eslint-disable-next-line no-param-reassign
+  totals.input = (totals.input ?? 0) + (tokens.input ?? 0);
+  totals.output = (totals.output ?? 0) + (tokens.output ?? 0);
+  totals.cache_read = (totals.cache_read ?? 0) + (tokens.cache_read ?? 0);
+  totals.cache_write = (totals.cache_write ?? 0) + (tokens.cache_write ?? 0);
+  totals.reasoning = (totals.reasoning ?? 0) + (tokens.reasoning ?? 0);
+  totals.messages += 1;
+  totals.costUsd += costUsd;
 }
