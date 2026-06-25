@@ -39,6 +39,14 @@ const APP_NAME = "OpenCode Quota";
 const RENDERER_HTML = "renderer/index.html";
 
 // =============================================================================
+// Linux sandbox workaround
+// =============================================================================
+
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("no-sandbox");
+}
+
+// =============================================================================
 // Path resolution (handles both dev and packaged modes)
 // =============================================================================
 
@@ -383,35 +391,40 @@ app.whenReady().then(async () => {
   // Register IPC handlers
   registerIpcHandlers(quotaConfig, guiConfig);
 
-  // Create tray icon
+  // Create tray icon (with fallback when system tray is unsupported)
   const icon = createTrayIcon();
-  tray = new Tray(icon);
-  tray.setToolTip(APP_NAME);
+  try {
+    tray = new Tray(icon);
+    tray.setToolTip(APP_NAME);
 
-  // Create tray context menu
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Refresh Quota",
-      click: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("app:refresh");
-        }
+    // Create tray context menu
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Refresh Quota",
+        click: () => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("app:refresh");
+          }
+        },
       },
-    },
-    { type: "separator" },
-    {
-      label: "Quit",
-      click: () => {
-        app.quit();
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          app.quit();
+        },
       },
-    },
-  ]);
-  tray.setContextMenu(contextMenu);
+    ]);
+    tray.setContextMenu(contextMenu);
 
-  // Toggle window on tray click
-  tray.on("click", () => {
-    toggleWindow();
-  });
+    // Toggle window on tray click
+    tray.on("click", () => {
+      toggleWindow();
+    });
+  } catch (err) {
+    console.warn("System tray not available — running in window-only mode:", (err as Error).message);
+    tray = null;
+  }
 
   // Create the popup window
   mainWindow = createWindow(guiConfig);
@@ -426,6 +439,9 @@ app.whenReady().then(async () => {
 
   // Show initially
   mainWindow.show();
+}).catch((err: unknown) => {
+  console.error("OpenCode Quota GUI failed to start:", err);
+  app.quit();
 });
 
 // Prevent app from quitting when all windows are hidden

@@ -86,11 +86,28 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     // Try to find electron
     const electronCmd = process.env.ELECTRON_PATH || "electron";
 
+    // Allow passing extra args to Electron (e.g. --no-sandbox on Linux)
+    const electronArgs = process.env.ELECTRON_ARGS
+      ? process.env.ELECTRON_ARGS.split(" ").filter(Boolean)
+      : [];
+
+    // Auto-enable --no-sandbox on Linux when not explicitly requested
+    if (
+      process.platform === "linux" &&
+      !electronArgs.includes("--no-sandbox") &&
+      !electronArgs.includes("--no-sandbox=true")
+    ) {
+      electronArgs.push("--no-sandbox");
+    }
+
+    const spawnArgs = [...electronArgs, guiMainPath];
+
     console.log("Launching OpenCode Quota GUI...");
     console.log(`  Electron: ${electronCmd}`);
+    if (electronArgs.length) console.log(`  Args:     ${electronArgs.join(" ")}`);
     console.log(`  Main:     ${guiMainPath}`);
 
-    const child = spawn(electronCmd, [guiMainPath], {
+    const child = spawn(electronCmd, spawnArgs, {
       stdio: "inherit",
       detached: true,
     });
