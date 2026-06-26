@@ -30,6 +30,8 @@
   let toastTimer = null;
   let showAllModels = false;
   let theme = "light";
+  let showMergedTokens = false;
+  let mergedTokenData = null;
 
   // ===========================================================================
   // DOM helpers
@@ -96,6 +98,18 @@
     try {
       const window = explicitWindow || "week";
       tokenData = await api.tokens.query({ window });
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+    setLoading(false);
+    renderTokenUsage();
+  }
+
+  async function fetchMergedTokens() {
+    setLoading(true);
+    try {
+      mergedTokenData = await api.tokens.merged();
+      showMergedTokens = true;
     } catch (e) {
       showToast(e.message, "error");
     }
@@ -458,6 +472,30 @@
   }
 
   function renderTokenUsageInto(container) {
+    // ── Merged view toggle ────────────────────────────
+    const toggleBar = el("div", { className: "filter-bar", style: { marginBottom: "8px" } });
+    toggleBar.appendChild(el("button", {
+      className: "btn btn-small " + (showMergedTokens ? "btn-primary" : ""),
+      onClick: () => {
+        if (!showMergedTokens) {
+          fetchMergedTokens();
+        } else {
+          showMergedTokens = false;
+          mergedTokenData = null;
+          renderTokenUsage();
+        }
+      },
+    }, "🌐 Merged"));
+    toggleBar.appendChild(el("span", {
+      style: { fontSize: "10px", color: "var(--text-muted)", marginLeft: "8px" },
+    }, showMergedTokens ? "All machines" : "This machine only"));
+    container.appendChild(toggleBar);
+
+    if (showMergedTokens) {
+      renderMergedTokenUsage(container);
+      return;
+    }
+
     if (!tokenData) {
       container.appendChild(el("div", { className: "loading-center" },
         el("span", { className: "spinner" }), " Loading token data...",
@@ -675,6 +713,71 @@
   }
 
   function renderTokenUsage() { const c = $(".tab-content"); if (c) { clear(c); renderTokenUsageInto(c); } }
+
+  // ===========================================================================
+  // Merged Token Usage (cross-machine sync)
+  // ===========================================================================
+  function renderMergedTokenUsage(container) {
+    if (!mergedTokenData) {
+      container.appendChild(el("div", { className: "loading-center" },
+        el("span", { className: "spinner" }), " Loading merged data...",
+      ));
+      return;
+    }
+
+    const totals = mergedTokenData.totals || {};
+    const byPM = mergedTokenData.byProviderModel || [];
+
+    // ── Totals card ───────────────────────────────────
+    const card = el("div", { className: "card" });
+    card.appendChild(el("div", { className: "card-title" }, "All Machines — Merged Totals"));
+    const grid = el("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px", marginTop: "6px" } });
+    grid.appendChild(renderKV("Messages", formatNumber(totals.messages || 0)));
+    grid.appendChild(renderKV("Cost", fmtUsd(totals.costUsd), "var(--accent)"));
+    grid.appendChild(renderKV("Input Tokens", fmtCompact(totals.tokens?.input || 0)));
+    grid.appendChild(renderKV("Output Tokens", fmtCompact(totals.tokens?.output || 0)));
+    grid.appendChild(renderKV("Cache Read", fmtCompact(totals.tokens?.cache_read || 0)));
+    grid.appendChild(renderKV("Cache Write", fmtCompact(totals.tokens?.cache_write || 0)));
+    card.appendChild(grid);
+    container.appendChild(card);
+
+    // ── By provider/model table ───────────────────────
+    if (byPM.length > 0) {
+      const modelCard = el("div", { className: "card" });
+      modelCard.appendChild(el("div", { className: "card-title", style: { marginBottom: "8px" } }, "By Provider / Model"));
+
+      const table = el("table", { className: "data-table" });
+      const thead = el("thead");
+      const hRow = el("tr");
+      ["Provider", "Model", "Input", "Output", "C.Read", "C.Write", "Total", "Cost"].forEach(h => {
+        hRow.appendChild(el("th", {}, h));
+      });
+      thead.appendChild(hRow);
+      table.appendChild(thead);
+
+      const tbody = el("tbody");
+      const sorted = [...byPM].sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0));
+      sorted.forEach(row => {
+        const t = row.tokens || {};
+        const tr = el("tr");
+        [row.provider || "?",
+         row.model || "?",
+         fmtCompact(t.input || 0),
+         fmtCompact(t.output || 0),
+         fmtCompact(t.cache_read || 0),
+         fmtCompact(t.cache_write || 0),
+         fmtCompact((t.input||0)+(t.output||0)+(t.cache_read||0)+(t.cache_write||0)),
+         fmtUsd(row.costUsd)
+        ].forEach((v, i) => {
+          tr.appendChild(el("td", { className: i >= 2 && i <= 6 ? "num-col" : i === 7 ? "cost-col" : "text-col" }, v));
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      modelCard.appendChild(table);
+      container.appendChild(modelCard);
+    }
+  }
 
   // ===========================================================================
   // Budget Alerts
