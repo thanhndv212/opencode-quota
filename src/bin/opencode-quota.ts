@@ -78,10 +78,24 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     const { spawn } = await import("child_process");
     const { fileURLToPath } = await import("url");
     const { dirname, join } = await import("path");
+    const { existsSync } = await import("fs");
 
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
     const guiMainPath = join(__dirname, "..", "gui", "main.js");
+
+    // Resolve the project root for pricing sync
+    // dist/bin/ → dist/ → project root → opencode-quota/
+    const projectRoot = join(__dirname, "..", "..");
+    const repoPricingDir = join(projectRoot, "opencode-quota");
+
+    // Set OPENCODE_QUOTA_SYNC_DIR so the GUI picks up repo-synced pricing overrides.
+    // The env var is expected to point to opencode-quota/token-sync/; pricing
+    // code derives the parent opencode-quota/ directory from it.
+    const tokenSyncDir = join(repoPricingDir, "token-sync");
+    if (existsSync(tokenSyncDir)) {
+      process.env.OPENCODE_QUOTA_SYNC_DIR = tokenSyncDir;
+    }
 
     // Try to find electron
     const electronCmd = process.env.ELECTRON_PATH || "electron";

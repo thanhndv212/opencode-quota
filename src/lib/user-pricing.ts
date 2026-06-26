@@ -12,7 +12,7 @@
  */
 
 import { readFile } from "fs/promises";
-import { existsSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
 import { join } from "path";
 
 import { writeJsonAtomic } from "./atomic-json.js";
@@ -61,15 +61,15 @@ const STORE_CACHE_TTL_MS = 30_000; // 30 seconds before re-reading from disk
 // =============================================================================
 
 function getUserPricingFilePath(): string {
-  // Prefer repo-based path so pricing overrides sync via git
+  // 1. OPENCODE_QUOTA_SYNC_DIR env var (set by OpenCode plugin runtime)
   if (process.env.OPENCODE_QUOTA_SYNC_DIR) {
     // OPENCODE_QUOTA_SYNC_DIR points to e.g. opencode-quota/token-sync/
     // Use the parent opencode-quota/ directory in the repo
-    const repoDir = join(process.env.OPENCODE_QUOTA_SYNC_DIR, "..");
-    if (!existsSync(repoDir)) mkdirSync(repoDir, { recursive: true });
-    return join(repoDir, USER_PRICING_FILENAME);
+    const repoPath = join(process.env.OPENCODE_QUOTA_SYNC_DIR, "..", USER_PRICING_FILENAME);
+    if (existsSync(repoPath)) return repoPath;
   }
-  // Fall back to local config
+
+  // 2. Local config (~/.config/opencode/opencode-quota/user-pricing.json)
   const { configDir } = getOpencodeRuntimeDirs();
   return join(configDir, USER_PRICING_DIRNAME, USER_PRICING_FILENAME);
 }
