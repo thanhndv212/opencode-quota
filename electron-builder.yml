@@ -13,6 +13,8 @@ files:
 extraResources:
   - from: dist/gui/renderer
     to: renderer
+  - from: opencode-quota/user-pricing.json
+    to: opencode-quota/user-pricing.json
 
 extraMetadata:
   main: dist/gui/main.js

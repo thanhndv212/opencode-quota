@@ -61,7 +61,7 @@ const STORE_CACHE_TTL_MS = 30_000; // 30 seconds before re-reading from disk
 // =============================================================================
 
 function getUserPricingFilePath(): string {
-  // 1. OPENCODE_QUOTA_SYNC_DIR env var (set by OpenCode plugin runtime)
+  // 1. OPENCODE_QUOTA_SYNC_DIR env var (set by OpenCode plugin runtime or CLI)
   if (process.env.OPENCODE_QUOTA_SYNC_DIR) {
     // OPENCODE_QUOTA_SYNC_DIR points to e.g. opencode-quota/token-sync/
     // Use the parent opencode-quota/ directory in the repo
@@ -69,7 +69,15 @@ function getUserPricingFilePath(): string {
     if (existsSync(repoPath)) return repoPath;
   }
 
-  // 2. Local config (~/.config/opencode/opencode-quota/user-pricing.json)
+  // 2. Bundled in packaged Electron app (AppImage / dmg)
+  // process.resourcesPath is set by Electron when running in a packaged build.
+  const resourcesPath = (process as unknown as Record<string, unknown>).resourcesPath;
+  if (typeof resourcesPath === "string" && resourcesPath) {
+    const bundledPath = join(resourcesPath, USER_PRICING_DIRNAME, USER_PRICING_FILENAME);
+    if (existsSync(bundledPath)) return bundledPath;
+  }
+
+  // 3. Local config (~/.config/opencode/opencode-quota/user-pricing.json)
   const { configDir } = getOpencodeRuntimeDirs();
   return join(configDir, USER_PRICING_DIRNAME, USER_PRICING_FILENAME);
 }
