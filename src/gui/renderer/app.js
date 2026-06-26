@@ -29,6 +29,7 @@
   let isLoading = false;
   let toastTimer = null;
   let showAllModels = false;
+  let theme = "light";
 
   // ===========================================================================
   // DOM helpers
@@ -173,10 +174,13 @@
   // Header
   // ===========================================================================
   function renderHeader() {
+    const themeLabel = theme === "dark" ? "☀ Light" : "☾ Dark";
+    const themeTitle = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
     return el("div", { className: "app-header" },
       el("h1", {}, "Quota Monitor"),
       el("div", { className: "header-actions" },
         el("button", { className: "btn btn-small btn-refresh", onClick: refreshQuota }, "⟳ Refresh"),
+        el("button", { className: "btn btn-small", onClick: toggleTheme, title: themeTitle }, themeLabel),
         el("button", { className: "btn-icon", onClick: () => api.app.quit(), title: "Quit" }, "✕"),
       ),
     );
@@ -1002,10 +1006,46 @@
     return row;
   }
 
+  function toggleTheme() {
+    theme = theme === "dark" ? "light" : "dark";
+    localStorage.setItem("quota-theme", theme);
+    applyTheme();
+    renderHeaderActions();
+  }
+
+  function applyTheme() {
+    if (theme === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  }
+
+  function renderHeaderActions() {
+    const actions = $(".header-actions");
+    if (!actions) return;
+    const themeLabel = theme === "dark" ? "☀ Light" : "☾ Dark";
+    const themeTitle = theme === "dark" ? "Switch to light theme" : "Switch to dark theme";
+    const btns = $$(".btn", actions);
+    // The toggle is the second button (index 1)
+    const toggleBtn = btns[1];
+    if (toggleBtn && toggleBtn.title && toggleBtn.title.includes("theme")) {
+      toggleBtn.textContent = themeLabel;
+      toggleBtn.title = themeTitle;
+    }
+  }
+
   // ===========================================================================
   // Init
   // ===========================================================================
   function init() {
+    // Load saved theme
+    const saved = localStorage.getItem("quota-theme");
+    if (saved === "light" || saved === "dark") {
+      theme = saved;
+    }
+    applyTheme();
+
     render();
     refreshQuota();
     loadAlerts();

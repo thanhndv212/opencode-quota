@@ -5,11 +5,14 @@
  * per-1M-token USD rates for any provider/model combination. These overrides
  * take precedence over the models.dev pricing snapshot.
  *
- * Data is persisted in ~/.config/opencode-quota/user-pricing.json and
- * cached in memory for fast lookups during token-cost aggregation.
+ * Data is persisted in the repo (opencode-quota/user-pricing.json) for git
+ * sync when OPENCODE_QUOTA_SYNC_DIR is set, falling back to local config
+ * (~/.config/opencode/opencode-quota/user-pricing.json). Cached in memory
+ * for fast lookups during token-cost aggregation.
  */
 
 import { readFile } from "fs/promises";
+import { existsSync, mkdirSync } from "fs";
 import { join } from "path";
 
 import { writeJsonAtomic } from "./atomic-json.js";
@@ -58,6 +61,15 @@ const STORE_CACHE_TTL_MS = 30_000; // 30 seconds before re-reading from disk
 // =============================================================================
 
 function getUserPricingFilePath(): string {
+  // Prefer repo-based path so pricing overrides sync via git
+  if (process.env.OPENCODE_QUOTA_SYNC_DIR) {
+    // OPENCODE_QUOTA_SYNC_DIR points to e.g. opencode-quota/token-sync/
+    // Use the parent opencode-quota/ directory in the repo
+    const repoDir = join(process.env.OPENCODE_QUOTA_SYNC_DIR, "..");
+    if (!existsSync(repoDir)) mkdirSync(repoDir, { recursive: true });
+    return join(repoDir, USER_PRICING_FILENAME);
+  }
+  // Fall back to local config
   const { configDir } = getOpencodeRuntimeDirs();
   return join(configDir, USER_PRICING_DIRNAME, USER_PRICING_FILENAME);
 }
