@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "overrides": {
+    "deepseek/deepseek-v4-pro": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "rates": {
+        "input": 0.435,
+        "output": 0.87,
+        "cache_read": 0.003625
+      },
+      "label": "DeepSeek V4 Pro (official)",
+      "createdAt": 1782349121294,
+      "updatedAt": 1782349121294
+    },
+    "deepseek/deepseek-v4-flash": {
+      "provider": "deepseek",
+      "model": "deepseek-v4-flash",
+      "rates": {
+        "input": 0.14,
+        "output": 0.28,
+        "cache_read": 0.0028
+      },
+      "label": "DeepSeek V4 Flash (official)",
+      "createdAt": 1782349121295,
+      "updatedAt": 1782349121295
+    },
+    "deepseek/deepseek-reasoner": {
+      "provider": "deepseek",
+      "model": "deepseek-reasoner",
+      "rates": {
+        "input": 0.14,
+        "output": 0.28,
+        "cache_read": 0.0028
+      },
+      "label": "DeepSeek Reasoner → V4 Flash (official)",
+      "createdAt": 1782349121296,
+      "updatedAt": 1782349121296
+    },
+    "opencode-go/deepseek-v4-pro": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-pro",
+      "rates": {
+        "input": 1.74,
+        "output": 3.48,
+        "cache_read": 0.0145
+      },
+      "createdAt": 1782349423077,
+      "updatedAt": 1782349650480
+    },
+    "opencode-go/deepseek-v4-flash": {
+      "provider": "opencode-go",
+      "model": "deepseek-v4-flash",
+      "rates": {
+        "input": 0.14,
+        "output": 0.28,
+        "cache_read": 0.0028
+      },
+      "createdAt": 1782349423086,
+      "updatedAt": 1782349650480
+    },
+    "opencode/deepseek-v4-flash-free": {
+      "provider": "opencode",
+      "model": "deepseek-v4-flash-free",
+      "rates": {
+        "input": 0.14,
+        "output": 0.28,
+        "cache_read": 0.0028
+      },
+      "createdAt": 1782349423087,
+      "updatedAt": 1782349650481
+    },
+    "ollama-cloud/deepseek-v4-pro": {
+      "provider": "ollama-cloud",
+      "model": "deepseek-v4-pro",
+      "rates": {
+        "input": 1.74,
+        "output": 3.48,
+        "cache_read": 0.0145
+      },
+      "createdAt": 1782349423088,
+      "updatedAt": 1782349650481
+    },
+    "opencode-go/glm-5.2": {
+      "provider": "opencode-go",
+      "model": "glm-5.2",
+      "rates": {
+        "input": 1.4,
+        "output": 4.4,
+        "cache_read": 0.26
+      },
+      "createdAt": 1782349650472,
+      "updatedAt": 1782349650472
+    },
+    "opencode-go/glm-5.1": {
+      "provider": "opencode-go",
+      "model": "glm-5.1",
+      "rates": {
+        "input": 1.4,
+        "output": 4.4,
+        "cache_read": 0.26
+      },
+      "createdAt": 1782349650474,
+      "updatedAt": 1782349650474
+    },
+    "opencode-go/kimi-k2.7-code": {
+      "provider": "opencode-go",
+      "model": "kimi-k2.7-code",
+      "rates": {
+        "input": 0.95,
+        "output": 4,
+        "cache_read": 0.19
+      },
+      "createdAt": 1782349650474,
+      "updatedAt": 1782349650474
+    },
+    "opencode-go/kimi-k2.6": {
+      "provider": "opencode-go",
+      "model": "kimi-k2.6",
+      "rates": {
+        "input": 0.95,
+        "output": 4,
+        "cache_read": 0.16
+      },
+      "createdAt": 1782349650475,
+      "updatedAt": 1782349650475
+    },
+    "opencode-go/minimax-m3": {
+      "provider": "opencode-go",
+      "model": "minimax-m3",
+      "rates": {
+        "input": 0.3,
+        "output": 1.2,
+        "cache_read": 0.06
+      },
+      "createdAt": 1782349650476,
+      "updatedAt": 1782349650476
+    },
+    "opencode-go/minimax-m2.7": {
+      "provider": "opencode-go",
+      "model": "minimax-m2.7",
+      "rates": {
+        "input": 0.3,
+        "output": 1.2,
+        "cache_read": 0.06,
+        "cache_write": 0.375
+      },
+      "createdAt": 1782349650476,
+      "updatedAt": 1782349650476
+    },
+    "opencode-go/minimax-m2.5": {
+      "provider": "opencode-go",
+      "model": "minimax-m2.5",
+      "rates": {
+        "input": 0.3,
+        "output": 1.2,
+        "cache_read": 0.06,
+        "cache_write": 0.375
+      },
+      "createdAt": 1782349650477,
+      "updatedAt": 1782349650477
+    },
+    "opencode/minimax-m3-free": {
+      "provider": "opencode",
+      "model": "minimax-m3-free",
+      "rates": {
+        "input": 0.3,
+        "output": 1.2,
+        "cache_read": 0.06
+      },
+      "createdAt": 1782349650478,
+      "updatedAt": 1782349650478
+    },
+    "opencode-go/qwen3.7-max": {
+      "provider": "opencode-go",
+      "model": "qwen3.7-max",
+      "rates": {
+        "input": 2.5,
+        "output": 7.5,
+        "cache_read": 0.5,
+        "cache_write": 3.125
+      },
+      "createdAt": 1782349650478,
+      "updatedAt": 1782349650478
+    },
+    "opencode-go/qwen3.7-plus": {
+      "provider": "opencode-go",
+      "model": "qwen3.7-plus",
+      "rates": {
+        "input": 0.4,
+        "output": 1.6,
+        "cache_read": 0.04,
+        "cache_write": 0.5
+      },
+      "createdAt": 1782349650479,
+      "updatedAt": 1782349650479
+    }
+  }
+}
