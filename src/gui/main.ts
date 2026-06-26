@@ -298,6 +298,7 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let toggleCooldownUntil = 0;
 
 function createWindow(guiConfig: GuiConfig): BrowserWindow {
   const preloadPath = resolvePreloadPath();
@@ -328,7 +329,10 @@ function createWindow(guiConfig: GuiConfig): BrowserWindow {
   }
 
   win.on("blur", () => {
-    // Hide window when it loses focus (menubar behavior)
+    // Hide window when it loses focus (menubar behavior).
+    // Skip if within cooldown from a recent show-toggle to avoid
+    // the tray-click race where the click itself triggers blur.
+    if (Date.now() < toggleCooldownUntil) return;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.hide();
     }
@@ -357,6 +361,9 @@ function toggleWindow() {
   if (mainWindow.isVisible()) {
     mainWindow.hide();
   } else {
+    // Set cooldown to prevent the subsequent blur from re-hiding the window
+    toggleCooldownUntil = Date.now() + 300;
+
     // Position near the tray icon
     if (tray) {
       const trayBounds = tray.getBounds();
@@ -399,6 +406,19 @@ app.whenReady().then(async () => {
 
     // Create tray context menu
     const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Show Window",
+        click: () => {
+          toggleCooldownUntil = Date.now() + 300;
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            if (!mainWindow.isVisible()) {
+              mainWindow.show();
+            }
+            mainWindow.focus();
+          }
+        },
+      },
+      { type: "separator" },
       {
         label: "Refresh Quota",
         click: () => {
