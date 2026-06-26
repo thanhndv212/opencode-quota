@@ -2,7 +2,7 @@
 
 ```bash
 corepack enable
-corepack prepare pnpm@11.0.0 --activate
+corepack prepare pnpm@10.0.0 --activate
 pnpm install
 ```
 

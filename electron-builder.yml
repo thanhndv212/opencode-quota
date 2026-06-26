@@ -43,6 +43,7 @@ dmg:
       path: /Applications
 
 linux:
+  executableName: opencode-quota
   category: Development
   icon: build/icons
   target:
