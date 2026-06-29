@@ -23,12 +23,12 @@ Thanks for contributing. This repo has strict local-only behavior and regression
 ## Development Setup
 
 - The published package runtime supports Node.js `>=20.0.0` (matches `package.json` engines).
-- Repository development uses pnpm v11, which requires Node.js `>=22` for the pnpm CLI.
+- Repository development uses pnpm v10, which requires Node.js `>=18.12` for the pnpm CLI.
 - Enable the pinned package manager and install dependencies with:
 
 ```sh
 corepack enable
-corepack prepare pnpm@11.0.0 --activate
+corepack prepare pnpm@10.0.0 --activate
 pnpm install
 ```
 
