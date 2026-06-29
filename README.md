@@ -943,7 +943,6 @@ Run `/quota_status` and check the Anthropic section.
 | Claude is installed at a custom path | Set `anthropicBinaryPath` in `opencode-quota/quota-toast.json`. |
 | Not authenticated | Run `claude auth login`, then confirm `claude auth status` works. |
 | Auth works but no quota rows appear | Check `quota_source` and `message` in `/quota_status`; re-authenticate Claude if the OAuth credential fallback is missing or stale. |
-| Provider not detected | Confirm OpenCode is configured to use the `anthropic` provider. |
 
 </details>
 
