@@ -46,6 +46,7 @@ dmg:
 
 linux:
   executableName: opencode-quota
+  artifactName: "opencode-quota-${version}-${arch}.${ext}"
   category: Development
   icon: build/icons
   target:

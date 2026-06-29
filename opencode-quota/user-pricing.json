@@ -194,6 +194,104 @@
       },
       "createdAt": 1782349650479,
       "updatedAt": 1782349650479
+    },
+    "openai/gpt-5": {
+      "provider": "openai",
+      "model": "gpt-5",
+      "rates": {
+        "input": 3,
+        "output": 15
+      },
+      "label": "Test override",
+      "createdAt": 1782437105799,
+      "updatedAt": 1782437105799
+    },
+    "anthropic/claude-sonnet-4-5": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "rates": {
+        "input": 2.5,
+        "output": 12.5
+      },
+      "createdAt": 1782437105804,
+      "updatedAt": 1782437105806
+    },
+    "google/gemini-3-pro": {
+      "provider": "google",
+      "model": "gemini-3-pro",
+      "rates": {
+        "input": 1.25,
+        "output": 5
+      },
+      "createdAt": 1782437105809,
+      "updatedAt": 1782437105809
+    },
+    "deepseek/deepseek-v3": {
+      "provider": "deepseek",
+      "model": "deepseek-v3",
+      "rates": {
+        "input": 0.27,
+        "output": 1.1
+      },
+      "createdAt": 1782437105816,
+      "updatedAt": 1782437105816
+    },
+    "openai/gpt-4o": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "rates": {
+        "input": 2.5,
+        "output": 10,
+        "cache_read": 0.5
+      },
+      "createdAt": 1782437105820,
+      "updatedAt": 1782437105820
+    },
+    "test/test-model": {
+      "provider": "test",
+      "model": "test-model",
+      "rates": {
+        "input": 1
+      },
+      "createdAt": 1782437105825,
+      "updatedAt": 1782437105825
+    },
+    "provider-b/model-3": {
+      "provider": "provider-b",
+      "model": "model-3",
+      "rates": {
+        "input": 3
+      },
+      "createdAt": 1782437105840,
+      "updatedAt": 1782437105840
+    },
+    "custom/custom-model": {
+      "provider": "custom",
+      "model": "custom-model",
+      "rates": {
+        "input": 5,
+        "output": 25
+      },
+      "createdAt": 1782437105850,
+      "updatedAt": 1782437105850
+    },
+    "openai/gpt-5-merged": {
+      "provider": "openai",
+      "model": "gpt-5-merged",
+      "rates": {
+        "input": 99
+      },
+      "createdAt": 1782437105854,
+      "updatedAt": 1782437105854
+    },
+    "synctest/sync-model": {
+      "provider": "synctest",
+      "model": "sync-model",
+      "rates": {
+        "input": 7
+      },
+      "createdAt": 1782437105857,
+      "updatedAt": 1782437105857
     }
   }
 }
