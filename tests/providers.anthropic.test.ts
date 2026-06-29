@@ -99,23 +99,33 @@ describe("anthropic provider", () => {
     expect(anthropicProvider.matchesCurrentModel?.("copilot/claude-sonnet-4-5")).toBe(false);
   });
 
-  it("is available only when provider ids include anthropic and Claude CLI auth is ready", async () => {
+  it("is available when provider ids include anthropic, without needing Claude CLI auth", async () => {
     const { hasAnthropicCredentialsConfigured } = await import("../src/lib/anthropic.js");
-    (hasAnthropicCredentialsConfigured as any).mockResolvedValue(true);
+    (hasAnthropicCredentialsConfigured as any).mockResolvedValue(false);
 
     await expect(
       anthropicProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["anthropic"] })),
     ).resolves.toBe(true);
     await expect(
-      anthropicProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["claude"] })),
-    ).resolves.toBe(false);
-    await expect(
-      anthropicProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["openai"] })),
-    ).resolves.toBe(false);
-    await expect(
       anthropicProvider.isAvailable(
         createProviderAvailabilityContext({ providerIds: ["copilot", "anthropic"] }),
       ),
+    ).resolves.toBe(true);
+    expect(hasAnthropicCredentialsConfigured).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Claude CLI auth when OpenCode has no matching provider configured", async () => {
+    const { hasAnthropicCredentialsConfigured } = await import("../src/lib/anthropic.js");
+    (hasAnthropicCredentialsConfigured as any).mockResolvedValue(true);
+
+    // Covers the standalone GUI app, which has no live OpenCode session and
+    // always reports an empty provider list, plus the case where OpenCode is
+    // configured with unrelated providers only.
+    await expect(
+      anthropicProvider.isAvailable(createProviderAvailabilityContext({ providerIds: [] })),
+    ).resolves.toBe(true);
+    await expect(
+      anthropicProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["openai"] })),
     ).resolves.toBe(true);
   });
 
@@ -127,7 +137,7 @@ describe("anthropic provider", () => {
     (queryAnthropicQuota as any).mockResolvedValueOnce(null);
 
     const ctx = createProviderAvailabilityContext({
-      providerIds: ["anthropic"],
+      providerIds: [],
       configOverrides: {
         anthropicBinaryPath: "/opt/claude/bin/claude",
       },
@@ -144,18 +154,30 @@ describe("anthropic provider", () => {
     });
   });
 
-  it("is not available when Claude CLI auth is missing even if provider id exists", async () => {
+  it("is not available when neither OpenCode config nor Claude CLI auth is present", async () => {
     const { hasAnthropicCredentialsConfigured } = await import("../src/lib/anthropic.js");
     (hasAnthropicCredentialsConfigured as any).mockResolvedValue(false);
 
-    const ctx = createProviderAvailabilityContext({ providerIds: ["anthropic"] });
+    const ctx = createProviderAvailabilityContext({ providerIds: [] });
 
     await expect(anthropicProvider.isAvailable(ctx)).resolves.toBe(false);
   });
 
-  it("is not available when provider lookup throws", async () => {
-    const ctx = createProviderAvailabilityContext({ providersError: new Error("boom") });
+  it("falls back to Claude CLI auth when provider lookup throws", async () => {
+    const { hasAnthropicCredentialsConfigured } = await import("../src/lib/anthropic.js");
 
-    await expect(anthropicProvider.isAvailable(ctx)).resolves.toBe(false);
+    (hasAnthropicCredentialsConfigured as any).mockResolvedValueOnce(false);
+    await expect(
+      anthropicProvider.isAvailable(
+        createProviderAvailabilityContext({ providersError: new Error("boom") }),
+      ),
+    ).resolves.toBe(false);
+
+    (hasAnthropicCredentialsConfigured as any).mockResolvedValueOnce(true);
+    await expect(
+      anthropicProvider.isAvailable(
+        createProviderAvailabilityContext({ providersError: new Error("boom") }),
+      ),
+    ).resolves.toBe(true);
   });
 });

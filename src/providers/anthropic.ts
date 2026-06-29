@@ -30,8 +30,8 @@ export const anthropicProvider: QuotaProvider = {
       providerId: "anthropic",
       fallbackOnError: false,
     });
-    if (!providerAvailable) {
-      return false;
+    if (providerAvailable) {
+      return true;
     }
 
     return await hasAnthropicCredentialsConfigured({
