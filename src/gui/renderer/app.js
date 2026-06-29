@@ -243,42 +243,48 @@
   // Dashboard
   // ===========================================================================
 
-  // Regex to match OpenCode Go multi-window entries like "OpenCode Go (dvtn) 5h"
-  const OPENCODE_GO_ENTRY_RE = /^OpenCode Go \(([^)]+)\) (5h|Weekly|Monthly)$/;
+  // Entries that share the same `group` (e.g. "Claude", "OpenCode Go (dvtn)")
+  // are rendered as one card with stacked mini-bars, same as OpenCode's own
+  // grouped quota display, instead of one full-width card per window.
+  const WINDOW_TAG_ORDER = { "5h": 0, "hourly": 0, "daily": 1, "weekly": 2, "monthly": 3, "yearly": 4 };
 
-  function parseOpenCodeGoEntry(entry) {
-    if (entry.kind === "value") return null;
-    const m = (entry.name || "").match(OPENCODE_GO_ENTRY_RE);
-    if (!m) return null;
-    return { workspace: m[1], window: m[2], entry };
+  function windowTag(entry) {
+    const label = (entry.label || "").trim().replace(/:+$/, "").trim();
+    return label || entry.name;
   }
 
-  function groupOpenCodeGoEntries(entries) {
-    const groups = new Map();
+  function groupPercentEntriesByLabel(entries) {
+    const byGroup = new Map();
     const others = [];
     for (const e of entries) {
-      const parsed = parseOpenCodeGoEntry(e);
-      if (!parsed) { others.push(e); continue; }
-      if (!groups.has(parsed.workspace)) groups.set(parsed.workspace, []);
-      groups.get(parsed.workspace).push(parsed);
+      const key = e.kind !== "value" && e.percentRemaining != null ? (e.group || "").trim() : "";
+      if (!key) { others.push(e); continue; }
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key).push(e);
+    }
+
+    const groups = new Map();
+    for (const [key, list] of byGroup) {
+      if (list.length >= 2) {
+        list.sort((a, b) => (WINDOW_TAG_ORDER[windowTag(a).toLowerCase()] ?? 99) - (WINDOW_TAG_ORDER[windowTag(b).toLowerCase()] ?? 99));
+        groups.set(key, list);
+      } else {
+        others.push(...list);
+      }
     }
     return { groups, others };
   }
 
-  function renderGroupedOpenCodeGoCard(workspace, windows) {
+  function renderGroupedCard(groupName, windows) {
     const card = el("div", { className: "card" });
-    card.appendChild(el("div", { className: "card-title", style: { marginBottom: "10px" } }, "OpenCode Go (" + workspace + ")"));
-
-    // Sort windows: 5h, Weekly, Monthly
-    const order = { "5h": 0, "Weekly": 1, "Monthly": 2 };
-    windows.sort((a, b) => (order[a.window] || 0) - (order[b.window] || 0));
+    card.appendChild(el("div", { className: "card-title", style: { marginBottom: "10px" } }, groupName));
 
     // Find the shortest reset time across all windows for the status line
     let shortestReset = "";
     let shortestDiff = Infinity;
     for (const w of windows) {
-      if (w.entry.resetTimeIso) {
-        const diff = new Date(w.entry.resetTimeIso) - new Date();
+      if (w.resetTimeIso) {
+        const diff = new Date(w.resetTimeIso) - new Date();
         if (diff > 0 && diff < shortestDiff) { shortestDiff = diff; }
       }
     }
@@ -289,7 +295,7 @@
     }
 
     for (const w of windows) {
-      const remaining = Math.max(0, Math.min(100, w.entry.percentRemaining || 0));
+      const remaining = Math.max(0, Math.min(100, w.percentRemaining || 0));
       const used = 100 - remaining;
       let barClass = "good";
       if (used >= 90) barClass = "danger";
@@ -298,7 +304,7 @@
       const row = el("div", { style: { display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" } });
 
       // Window label
-      row.appendChild(el("span", { style: { width: "52px", fontSize: "10px", color: "var(--text-secondary)", textAlign: "right", flexShrink: "0" } }, w.window));
+      row.appendChild(el("span", { style: { width: "52px", fontSize: "10px", color: "var(--text-secondary)", textAlign: "right", flexShrink: "0" } }, windowTag(w)));
 
       // Mini bar
       const barWrap = el("div", { className: "percent-bar-container", style: { flex: "1", margin: "0", height: "12px" } });
@@ -344,25 +350,19 @@
     const filterVal = sel.value;
     const filtered = filterVal === "all" ? entries : entries.filter(e => e.name && e.name.toLowerCase().includes(filterVal.toLowerCase()));
 
-    // Group OpenCode Go entries by workspace; render others as individual cards
-    const { groups, others } = groupOpenCodeGoEntries(filtered);
+    // Group entries that share a `group` (e.g. "Claude", "OpenCode Go (dvtn)")
+    // into one card; render the rest as individual cards
+    const { groups, others } = groupPercentEntriesByLabel(filtered);
 
-    // Sort grouped workspaces by Monthly remaining (descending), fall back to best window
-    const sortedGroups = [...groups].sort(([, aw], [, bw]) => {
-      const monthly = (ws) => ws.find(w => w.window === "Monthly")?.entry.percentRemaining;
-      const best = (ws) => Math.max(...ws.map(w => w.entry.percentRemaining ?? 0));
-      const aVal = monthly(aw) ?? best(aw);
-      const bVal = monthly(bw) ?? best(bw);
-      return bVal - aVal;
-    });
+    // Sort groups by their most-constrained window's remaining percent (descending)
+    const mostConstrained = (ws) => Math.min(...ws.map(w => w.percentRemaining ?? 0));
+    const sortedGroups = [...groups].sort(([, aw], [, bw]) => mostConstrained(bw) - mostConstrained(aw));
 
     // Merge groups and individual cards into one sorted list
     const merged = [
-      ...sortedGroups.map(([workspace, windows]) => {
-        const monthly = windows.find(w => w.window === "Monthly")?.entry.percentRemaining;
-        const best = Math.max(...windows.map(w => w.entry.percentRemaining ?? 0));
-        const key = -(monthly ?? best);                                            // negative = sort by remaining desc, groups below value
-        return { type: "group", workspace, windows, sortKey: key };
+      ...sortedGroups.map(([groupName, windows]) => {
+        const key = -mostConstrained(windows);                                     // negative = sort by remaining desc, groups below value
+        return { type: "group", groupName, windows, sortKey: key };
       }),
       ...others.map(entry => ({ type: "card", entry,
         sortKey: entry.percentRemaining == null ? -9999                           // value entry — pin to top
@@ -372,7 +372,7 @@
 
     for (const item of merged) {
       if (item.type === "group") {
-        container.appendChild(renderGroupedOpenCodeGoCard(item.workspace, item.windows));
+        container.appendChild(renderGroupedCard(item.groupName, item.windows));
       } else {
         container.appendChild(renderProviderCard(item.entry));
       }
