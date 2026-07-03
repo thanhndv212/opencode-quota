@@ -10,7 +10,8 @@
  *   opencode-quota gui              # Alternative invocation
  */
 
-import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, dialog, shell } from "electron";
+import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
@@ -37,6 +38,70 @@ const __dirname = path.dirname(__filename);
 
 const APP_NAME = "OpenCode Quota";
 const RENDERER_HTML = "renderer/index.html";
+const DASHBOARD_PORT = 3939;
+const DASHBOARD_URL = `http://localhost:${DASHBOARD_PORT}`;
+
+// =============================================================================
+// Dashboard server management
+// =============================================================================
+
+let dashboardProcess: ReturnType<typeof spawn> | null = null;
+
+async function isDashboardRunning(): Promise<boolean> {
+  try {
+    const response = await fetch(`${DASHBOARD_URL}/api/dashboard/summary`, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(2000),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+function startDashboardServer(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (dashboardProcess) {
+      resolve(); // Already running
+      return;
+    }
+
+    const dashboardScript = path.join(getAppRoot(), "bin", "opencode-quota.js");
+    
+    if (!existsSync(dashboardScript)) {
+      reject(new Error(`Dashboard script not found: ${dashboardScript}`));
+      return;
+    }
+
+    console.log(`Starting dashboard server: node ${dashboardScript} dashboard --port ${DASHBOARD_PORT}`);
+    
+    dashboardProcess = spawn("node", [dashboardScript, "dashboard", "--port", String(DASHBOARD_PORT)], {
+      detached: false,
+      stdio: "ignore",
+    });
+
+    dashboardProcess.on("error", (err) => {
+      console.error("Failed to start dashboard server:", err);
+      dashboardProcess = null;
+      reject(err);
+    });
+
+    dashboardProcess.on("exit", (code) => {
+      console.log(`Dashboard server exited with code ${code}`);
+      dashboardProcess = null;
+    });
+
+    // Give the server a moment to start
+    setTimeout(() => resolve(), 2000);
+  });
+}
+
+function stopDashboardServer(): void {
+  if (dashboardProcess) {
+    dashboardProcess.kill();
+    dashboardProcess = null;
+  }
+}
 
 // =============================================================================
 // Linux sandbox workaround
@@ -290,6 +355,26 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
   ipcMain.handle("app:quit", () => {
     app.quit();
   });
+
+  // ── Shell ──────────────────────────────────────────
+  ipcMain.handle("shell:openExternal", async (_event, params: { url: string }) => {
+    // If opening dashboard URL, ensure server is running first
+    if (params.url.startsWith(DASHBOARD_URL)) {
+      const isRunning = await isDashboardRunning();
+      if (!isRunning) {
+        try {
+          await startDashboardServer();
+        } catch (err) {
+          dialog.showErrorBox(
+            "Dashboard Server Error",
+            `Failed to start dashboard server:\n${(err as Error).message}`
+          );
+          throw err;
+        }
+      }
+    }
+    return shell.openExternal(params.url);
+  });
 }
 
 // =============================================================================
@@ -427,6 +512,24 @@ app.whenReady().then(async () => {
           }
         },
       },
+      {
+        label: "Open Dashboard",
+        click: async () => {
+          const isRunning = await isDashboardRunning();
+          if (!isRunning) {
+            try {
+              await startDashboardServer();
+            } catch (err) {
+              dialog.showErrorBox(
+                "Dashboard Server Error",
+                `Failed to start dashboard server:\n${(err as Error).message}`
+              );
+              return;
+            }
+          }
+          shell.openExternal(DASHBOARD_URL);
+        },
+      },
       { type: "separator" },
       {
         label: "Quit",
@@ -482,7 +585,10 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
-  // Cleanup
+  // Cleanup dashboard server
+  stopDashboardServer();
+  
+  // Cleanup tray
   if (tray && !tray.isDestroyed()) {
     tray.destroy();
   }

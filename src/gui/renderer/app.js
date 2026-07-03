@@ -194,6 +194,18 @@
       el("h1", {}, "Quota Monitor"),
       el("div", { className: "header-actions" },
         el("button", { className: "btn btn-small btn-refresh", onClick: refreshQuota }, "⟳ Refresh"),
+        el("button", { 
+          className: "btn btn-small", 
+          onClick: async () => {
+            try {
+              await api.shell.openExternal("http://localhost:3939");
+              showToast("Opening dashboard... (starting server if needed)", "success");
+            } catch (err) {
+              showToast("Failed to open dashboard: " + err.message, "error");
+            }
+          },
+          title: "Open historical dashboard in browser (auto-starts server)"
+        }, "📊 Dashboard"),
         el("button", { className: "btn btn-small", onClick: toggleTheme, title: themeTitle }, themeLabel),
         el("button", { className: "btn-icon", onClick: () => api.app.quit(), title: "Quit" }, "✕"),
       ),

@@ -116,6 +116,11 @@ const quotaApi = {
       };
     },
   },
+
+  // ── Shell ──────────────────────────────────────────────
+  shell: {
+    openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", { url }),
+  },
 };
 
 // Expose to renderer

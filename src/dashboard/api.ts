@@ -1,0 +1,237 @@
+/**
+ * Dashboard API - SQLite-backed historical quota tracking
+ */
+
+import { migrateSchema } from "./db-migrate.js";
+
+export interface QuotaSnapshot {
+  timestamp: number;
+  provider: string;
+  limits: QuotaLimit[];
+  percentUsed: number;
+  percentRemaining: number;
+}
+
+export interface QuotaLimit {
+  kind: string; // 'session', 'weekly_all', 'monthly'
+  group: string; // 'session', 'weekly', 'monthly'
+  percent: number; // 0-100
+  severity: string; // 'normal', 'warning', 'critical'
+  resets_at: string; // ISO timestamp
+  scope?: { model?: string }; // Optional model-specific limit
+}
+
+export interface UsageData {
+  tokensInput: number;
+  tokensOutput: number;
+  tokensCache: number;
+  costUsd: number;
+  requestCount: number;
+}
+
+export interface ModelUsage {
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+  tokensCache: number;
+  costUsd: number;
+  requestCount: number;
+}
+
+export interface WeeklyReset {
+  reset_at: number;
+  quota_used: number;
+  quota_remaining: number;
+  quota_limit: number;
+  reset_type: string;
+}
+
+interface DatabaseLike {
+  prepare(sql: string): {
+    get(...params: any[]): any;
+    run(...params: any[]): any;
+    all(...params: any[]): any[];
+  };
+  exec(sql: string): any;
+  close(): void;
+}
+
+export class DashboardApi {
+  private db: DatabaseLike;
+
+  constructor(db: DatabaseLike) {
+    this.db = db;
+    migrateSchema(this.db);
+  }
+
+  /**
+   * Capture current quota snapshot
+   */
+  captureSnapshot(provider: string, quotaData: any): void {
+    const now = Date.now();
+    this.db
+      .prepare(
+        `INSERT INTO quota_snapshots (provider, captured_at, quota_data)
+         VALUES (?, ?, ?)
+         ON CONFLICT(provider, captured_at) 
+         DO UPDATE SET quota_data = excluded.quota_data`
+      )
+      .run(provider, now, JSON.stringify(quotaData));
+  }
+
+  /**
+   * Get current quota (latest snapshot)
+   */
+  getCurrentQuota(provider: string): any {
+    const row = this.db
+      .prepare(
+        `SELECT quota_data
+         FROM quota_snapshots
+         WHERE provider = ?
+         ORDER BY captured_at DESC
+         LIMIT 1`
+      )
+      .get(provider);
+
+    return row ? JSON.parse(row.quota_data) : null;
+  }
+
+  /**
+   * Get quota history for chart
+   */
+  getQuotaHistory(provider: string, days: number = 7): QuotaSnapshot[] {
+    const since = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    const rows = this.db
+      .prepare(
+        `SELECT captured_at, quota_data
+         FROM quota_snapshots
+         WHERE provider = ? AND captured_at >= ?
+         ORDER BY captured_at ASC`
+      )
+      .all(provider, since);
+
+    return rows.map((row: any) => {
+      const data = JSON.parse(row.quota_data);
+      return {
+        timestamp: row.captured_at,
+        provider,
+        limits: data.limits || [],
+        percentUsed: 100 - (data.percentRemaining || 0),
+        percentRemaining: data.percentRemaining || 0,
+      };
+    });
+  }
+
+  /**
+   * Record usage for a session
+   */
+  recordUsage(provider: string, date: string, model: string, usage: UsageData): void {
+    this.db
+      .prepare(
+        `INSERT INTO usage_history 
+         (provider, date, model, tokens_input, tokens_output, tokens_cache, cost_usd, request_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(provider, date, model) DO UPDATE SET
+           tokens_input = tokens_input + excluded.tokens_input,
+           tokens_output = tokens_output + excluded.tokens_output,
+           tokens_cache = tokens_cache + excluded.tokens_cache,
+           cost_usd = cost_usd + excluded.cost_usd,
+           request_count = request_count + excluded.request_count`
+      )
+      .run(
+        provider,
+        date,
+        model,
+        usage.tokensInput,
+        usage.tokensOutput,
+        usage.tokensCache,
+        usage.costUsd,
+        usage.requestCount
+      );
+  }
+
+  /**
+   * Get per-model breakdown
+   */
+  getModelBreakdown(provider: string, days: number = 7): ModelUsage[] {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    const rows = this.db
+      .prepare(
+        `SELECT model,
+                SUM(tokens_input) as tokens_input,
+                SUM(tokens_output) as tokens_output,
+                SUM(tokens_cache) as tokens_cache,
+                SUM(cost_usd) as cost_usd,
+                SUM(request_count) as request_count
+         FROM usage_history
+         WHERE provider = ? AND date >= ?
+         GROUP BY model
+         ORDER BY cost_usd DESC`
+      )
+      .all(provider, since);
+
+    return rows.map((row: any) => ({
+      model: row.model,
+      tokensInput: row.tokens_input,
+      tokensOutput: row.tokens_output,
+      tokensCache: row.tokens_cache || 0,
+      costUsd: row.cost_usd,
+      requestCount: row.request_count,
+    }));
+  }
+
+  /**
+   * Get weekly reset history
+   */
+  getWeeklyResets(provider: string, weeks: number = 4): WeeklyReset[] {
+    const since = Date.now() - weeks * 7 * 24 * 60 * 60 * 1000;
+
+    return this.db
+      .prepare(
+        `SELECT reset_at, quota_used, quota_remaining, quota_limit, reset_type
+         FROM weekly_resets
+         WHERE provider = ? AND reset_at >= ?
+         ORDER BY reset_at DESC`
+      )
+      .all(provider, since);
+  }
+
+  /**
+   * Record weekly reset
+   */
+  recordWeeklyReset(
+    provider: string,
+    resetType: string,
+    quotaData: {
+      used: number;
+      remaining: number;
+      limit: number;
+    }
+  ): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO weekly_resets 
+         (provider, reset_at, quota_used, quota_remaining, quota_limit, reset_type)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        provider,
+        Date.now(),
+        quotaData.used,
+        quotaData.remaining,
+        quotaData.limit,
+        resetType
+      );
+  }
+
+  /**
+   * Close database connection
+   */
+  close(): void {
+    this.db.close();
+  }
+}

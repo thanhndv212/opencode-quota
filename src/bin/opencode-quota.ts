@@ -10,17 +10,20 @@ const USAGE = [
   "Usage:",
   "  npx @slkiser/opencode-quota init [--sync-legacy-config]",
   "  npx @slkiser/opencode-quota show [--provider <provider-id>] [--json] [--threshold <pct>]",
+  "  npx @slkiser/opencode-quota dashboard [--port <port>]",
   "  npx @slkiser/opencode-quota gui",
   "  npx @slkiser/opencode-quota --help",
   "",
   "Commands:",
-  "  init    Run the interactive quota installer",
-  "          --sync-legacy-config also writes experimental.quotaToast",
-  "  show    Print a quick quota glance",
-  "          --json               Machine-readable JSON output (reads from cache)",
-  "          --threshold <pct>    With --json, exit 1 if below <pct>%, 2 if no cached quota",
-  "          --provider <id>      Filter to one provider",
-  "  gui     Launch the desktop menubar GUI app (requires Electron)",
+  "  init      Run the interactive quota installer",
+  "            --sync-legacy-config also writes experimental.quotaToast",
+  "  show      Print a quick quota glance",
+  "            --json               Machine-readable JSON output (reads from cache)",
+  "            --threshold <pct>    With --json, exit 1 if below <pct>%, 2 if no cached quota",
+  "            --provider <id>      Filter to one provider",
+  "  dashboard Start the quota dashboard HTTP server (opens in browser)",
+  "            --port <port>        Port to listen on (default: 3939)",
+  "  gui       Launch the desktop menubar GUI app (requires Electron)",
 ].join("\n");
 
 function printUsage(): void {
@@ -72,6 +75,42 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === "show") {
     const { runCliShowCommand } = await import("../lib/cli-show.js");
     return await runCliShowCommand({ argv: rest });
+  }
+
+  if (command === "dashboard") {
+    const { spawn } = await import("child_process");
+    const { fileURLToPath } = await import("url");
+    const { dirname, join } = await import("path");
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const dashboardPath = join(__dirname, "dashboard.js");
+
+    // Parse port argument
+    const portIndex = rest.indexOf("--port");
+    const port = portIndex !== -1 ? rest[portIndex + 1] : "3939";
+
+    console.log(`Starting OpenCode Quota Dashboard on http://localhost:${port}...`);
+    console.log("Press Ctrl+C to stop the server.");
+
+    const child = spawn("node", [dashboardPath, "--port", port], {
+      stdio: "inherit",
+    });
+
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      console.error("Error starting dashboard server:", err);
+      process.exit(1);
+    });
+
+    // Keep process alive
+    await new Promise<void>((resolve) => {
+      child.on("exit", (code) => {
+        process.exitCode = code || 0;
+        resolve();
+      });
+    });
+
+    return 0;
   }
 
   if (command === "gui") {
