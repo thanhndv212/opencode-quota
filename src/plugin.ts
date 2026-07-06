@@ -61,6 +61,35 @@ import {
   isQuotaDialogCommand,
   type QuotaDialogCommandId,
 } from "./lib/quota-dialog-commands.js";
+import { getDashboardApi } from "./dashboard/dashboard-instance.js";
+import {
+  captureQuotaSnapshots,
+  detectAndRecordWeeklyResets,
+  type ProviderResultForSnapshot,
+} from "./dashboard/quota-snapshot-bridge.js";
+import { syncTodayUsageHistory } from "./dashboard/usage-history-bridge.js";
+
+/**
+ * Persist quota data already fetched for the toast/status report into the
+ * dashboard's history DB, if the dashboard DB is reachable. Swallows all
+ * errors: dashboard availability must never affect quota toast rendering.
+ */
+async function captureDashboardSnapshotsBestEffort(
+  providerResults: ProviderResultForSnapshot[],
+): Promise<void> {
+  try {
+    const dashboardApi = await getDashboardApi();
+    if (!dashboardApi) return;
+    // Must run before captureQuotaSnapshots(), which overwrites "current".
+    detectAndRecordWeeklyResets(dashboardApi, providerResults);
+    captureQuotaSnapshots(dashboardApi, providerResults);
+    syncTodayUsageHistory(dashboardApi).catch((err) => {
+      console.error("[dashboard] Usage history sync failed:", err instanceof Error ? err.message : err);
+    });
+  } catch (err) {
+    console.error("[dashboard] Snapshot capture failed:", err instanceof Error ? err.message : err);
+  }
+}
 
 // =============================================================================
 // Types
@@ -833,6 +862,14 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const { selection, availability, active, attemptedAny, hasExplicitProviderIssues, data } =
       quotaResult;
     const detectedProviderIds = active.map((provider) => provider.id);
+
+    // Best-effort: persist a dashboard snapshot from data already fetched for
+    // this toast/status report. Never awaited and never allowed to affect
+    // the toast path - dashboard availability (better-sqlite3, DB path) is
+    // independent of quota rendering.
+    if (quotaResult.providerResults.length > 0) {
+      void captureDashboardSnapshotsBestEffort(quotaResult.providerResults);
+    }
 
     if (runtimeConfig.showSessionTokens && params.sessionID) {
       lastSessionTokenError = quotaResult.sessionTokenError;
