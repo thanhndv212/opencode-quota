@@ -104,6 +104,13 @@ export type CollectQuotaRenderDataResult = {
   /** Pre-computed singleWindow-projected data. Only present when includeAllWindowsData=true and root style is allWindows. */
   singleWindowData?: QuotaRenderData | null;
   sessionTokenError?: SessionTokenError;
+  /**
+   * Raw per-provider results (pre-merge), parallel to `active`. Lets callers
+   * (e.g. the dashboard snapshot bridge) attribute quota data back to a
+   * specific provider id without triggering a second, separately-cached
+   * provider fetch.
+   */
+  providerResults: Array<{ providerId: string; result: QuotaProviderResult }>;
 };
 
 export type QuotaStatusLiveProbe = {
@@ -520,6 +527,7 @@ export async function collectQuotaRenderData(params: {
       attemptedAny: false,
       hasExplicitProviderIssues: false,
       data: null,
+      providerResults: [],
     };
   }
 
@@ -531,6 +539,7 @@ export async function collectQuotaRenderData(params: {
       attemptedAny: false,
       hasExplicitProviderIssues: false,
       data: null,
+      providerResults: [],
     };
   }
 
@@ -585,6 +594,7 @@ export async function collectQuotaRenderData(params: {
       attemptedAny: false,
       hasExplicitProviderIssues,
       data: errors.length > 0 ? { entries: [], errors } : null,
+      providerResults: [],
     };
   }
 
@@ -709,5 +719,9 @@ export async function collectQuotaRenderData(params: {
     allWindowsData,
     singleWindowData,
     sessionTokenError,
+    providerResults: active.map((provider, index) => ({
+      providerId: provider.id,
+      result: results[index]!,
+    })),
   };
 }

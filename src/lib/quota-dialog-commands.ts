@@ -56,11 +56,54 @@ import {
   BUNDLED_MAINTAINER_ANNOUNCEMENTS,
   getMaintainerAnnouncementsSummary,
 } from "./maintainer-announcements.js";
+import { getProviders } from "../providers/registry.js";
+import { getDashboardApi } from "../dashboard/dashboard-instance.js";
+
+const DASHBOARD_DEFAULT_PORT = 3939;
+
+async function buildQuotaDashboardCommandOutput(): Promise<string> {
+  const lines: string[] = [];
+  const startInstructions = [
+    "Start it:",
+    "  opencode-quota dashboard          (if linked globally: pnpm link --global)",
+    "  node dist/bin/dashboard.js        (from the opencode-quota repo)",
+    `  open http://localhost:${DASHBOARD_DEFAULT_PORT}`,
+  ];
+
+  const dashboardApi = await getDashboardApi();
+  if (!dashboardApi) {
+    lines.push(
+      "Dashboard database is not reachable from here (better-sqlite3 native module unavailable, or the OpenCode data directory could not be found).",
+    );
+    lines.push("");
+    lines.push(...startInstructions);
+    return lines.join("\n");
+  }
+
+  const providerIds = getProviders().map((provider) => provider.id);
+  const withSnapshots = providerIds.filter((id) => dashboardApi.getCurrentQuota(id) !== null);
+
+  if (withSnapshots.length === 0) {
+    lines.push("No quota snapshots captured yet.");
+    lines.push(
+      "Snapshots are captured automatically whenever a quota toast is computed (session.idle / session.compacted) — this reuses data already fetched, no extra API calls.",
+    );
+  } else {
+    lines.push(`Snapshots available for: ${withSnapshots.join(", ")}`);
+  }
+
+  lines.push("");
+  lines.push("View charts:");
+  lines.push(...startInstructions);
+
+  return lines.join("\n");
+}
 
 export type QuotaDialogCommandId =
   | "quota"
   | "quota_status"
   | "quota_announcements"
+  | "quota_dashboard"
   | "pricing_refresh"
   | TokenReportCommandId;
 
@@ -233,6 +276,13 @@ export const QUOTA_DIALOG_COMMANDS: readonly QuotaDialogCommandSpec[] = [
     description: "List active bundled maintainer announcements.",
     dialogSize: "xlarge",
     acceptsArguments: true,
+  },
+  {
+    id: "quota_dashboard",
+    slashName: "quota_dashboard",
+    title: "OpenCode Quota Dashboard",
+    description: "Show dashboard snapshot status and how to launch the visual quota dashboard.",
+    dialogSize: "xlarge",
   },
   {
     id: "pricing_refresh",
@@ -824,7 +874,11 @@ export async function buildQuotaDialogCommandOutput(params: {
   setPricingSnapshotAutoRefresh(runtime.config.pricingSnapshot.autoRefresh);
   setPricingSnapshotSelection(runtime.config.pricingSnapshot.source);
 
-  if (!runtime.config.enabled && params.command !== "quota_announcements") {
+  if (
+    !runtime.config.enabled &&
+    params.command !== "quota_announcements" &&
+    params.command !== "quota_dashboard"
+  ) {
     return { state: "noop", command: params.command, reason: "disabled" };
   }
 
@@ -885,6 +939,21 @@ export async function buildQuotaDialogCommandOutput(params: {
     return outputResult({
       command: params.command,
       output: await buildQuotaAnnouncementsCommandOutput(runtime),
+    });
+  }
+
+  if (params.command === "quota_dashboard") {
+    if ((params.arguments ?? "").trim()) {
+      return outputResult({
+        command: params.command,
+        output:
+          "Invalid arguments for /quota_dashboard\n\nThis command does not accept arguments.\n\nUsage: /quota_dashboard",
+      });
+    }
+
+    return outputResult({
+      command: params.command,
+      output: await buildQuotaDashboardCommandOutput(),
     });
   }
 

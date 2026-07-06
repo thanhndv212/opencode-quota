@@ -3,6 +3,7 @@
  */
 
 import type { Server } from "http";
+import { fileURLToPath } from "url";
 import { DashboardApi } from "./api.js";
 
 // Type for Express-like interface (avoiding direct dependency until added to package.json)
@@ -45,11 +46,22 @@ export async function startDashboardServer(
 
   const app: ExpressLike = express.default();
 
-  // Serve static files (HTML/CSS/JS)
-  const staticPath = new URL("./public", import.meta.url).pathname;
+  // Serve static files (HTML/CSS/JS). fileURLToPath (not .pathname) is required
+  // here — .pathname leaves spaces percent-encoded ("%20"), which breaks path
+  // resolution/asar lookups when the app is installed under a path containing
+  // a space (e.g. the packaged macOS app's own bundle, "OpenCode Quota.app").
+  const staticPath = fileURLToPath(new URL("./public", import.meta.url));
   app.use(express.default.static(staticPath));
 
   // API routes
+  app.get("/api/dashboard/providers", async (_req: any, res: any) => {
+    try {
+      res.json({ providers: dashboardApi.listProviders() });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   app.get("/api/dashboard/summary", async (req: any, res: any) => {
     try {
       const providers = req.query.providers?.toString().split(",") || ["anthropic"];

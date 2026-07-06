@@ -93,6 +93,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     console.log(`Starting OpenCode Quota Dashboard on http://localhost:${port}...`);
     console.log("Press Ctrl+C to stop the server.");
 
+    // Plain "node" — when this command is spawned by the packaged Electron app
+    // (src/gui/main.ts's startDashboardServer), that parent process already
+    // resolves a real system node and prepends its directory to PATH before
+    // spawning us, so this bare lookup resolves correctly by inheritance.
     const child = spawn("node", [dashboardPath, "--port", port], {
       stdio: "inherit",
     });

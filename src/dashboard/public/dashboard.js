@@ -3,6 +3,56 @@
 let burndownChart = null;
 let modelChart = null;
 
+// Chart.js doesn't pick up CSS custom properties, so mirror the theme here.
+if (typeof Chart !== 'undefined') {
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  Chart.defaults.color = isDark ? '#909296' : '#666';
+  Chart.defaults.borderColor = isDark ? '#373a40' : '#ddd';
+}
+
+const KNOWN_PROVIDER_LABELS = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  openrouter: 'OpenRouter',
+  google: 'Google',
+};
+
+function labelForProvider(provider) {
+  return KNOWN_PROVIDER_LABELS[provider] || provider;
+}
+
+/**
+ * Replaces the provider <select>'s hardcoded options with the real set of
+ * providers that actually have data, fetched from the backend. A static
+ * list drifts as providers are added/renamed (this app supports many:
+ * Anthropic, OpenAI, DeepSeek, Z.ai, Moonshot, Cursor, GitHub Copilot,
+ * OpenRouter, Google, and more) — silently omitting one the user has real
+ * data for makes the dashboard look empty for no visible reason. Falls
+ * back to the static HTML options (unmodified) if the fetch fails or no
+ * provider has recorded any data yet (fresh install).
+ */
+async function populateProviderSelect() {
+  const providerSelect = document.getElementById('provider-select');
+  try {
+    const res = await fetch('/api/dashboard/providers');
+    if (!res.ok) return;
+    const { providers } = await res.json();
+    if (!providers || providers.length === 0) return;
+
+    providerSelect.innerHTML = '';
+    for (const provider of providers) {
+      const option = document.createElement('option');
+      option.value = provider;
+      option.textContent = labelForProvider(provider);
+      option.selected = true; // default to showing everything that actually has data
+      providerSelect.appendChild(option);
+    }
+  } catch {
+    // Network error — keep the static fallback options already in the HTML.
+  }
+}
+
 async function fetchDashboardData() {
   const providerSelect = document.getElementById('provider-select');
   const providers = Array.from(providerSelect.selectedOptions).map((opt) => opt.value);
@@ -65,6 +115,10 @@ function renderQuotaCards(providers) {
 
 function renderBurndownChart(providers) {
   const ctx = document.getElementById('burndown-chart');
+  if (!ctx) {
+    console.error('renderBurndownChart: #burndown-chart canvas not found in DOM');
+    return;
+  }
 
   if (burndownChart) {
     burndownChart.destroy();
@@ -120,6 +174,10 @@ function renderBurndownChart(providers) {
 
 function renderModelChart(providers) {
   const ctx = document.getElementById('model-chart');
+  if (!ctx) {
+    console.error('renderModelChart: #model-chart canvas not found in DOM');
+    return;
+  }
 
   if (modelChart) {
     modelChart.destroy();
@@ -284,7 +342,7 @@ document.getElementById('provider-select').addEventListener('change', renderDash
 document.getElementById('timerange-select').addEventListener('change', renderDashboard);
 
 // Initial render
-renderDashboard();
+populateProviderSelect().then(renderDashboard);
 
 // Auto-refresh every 5 minutes
 setInterval(renderDashboard, 5 * 60 * 1000);
