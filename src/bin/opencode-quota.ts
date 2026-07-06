@@ -21,7 +21,8 @@ const USAGE = [
   "            --json               Machine-readable JSON output (reads from cache)",
   "            --threshold <pct>    With --json, exit 1 if below <pct>%, 2 if no cached quota",
   "            --provider <id>      Filter to one provider",
-  "  dashboard Start the quota dashboard HTTP server (opens in browser)",
+  "  dashboard Start the headless quota dashboard JSON API server (no UI —",
+  "            use `gui` for that; this is for programmatic/headless access)",
   "            --port <port>        Port to listen on (default: 3939)",
   "  gui       Launch the desktop menubar GUI app (requires Electron)",
 ].join("\n");

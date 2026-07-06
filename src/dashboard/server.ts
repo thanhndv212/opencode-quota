@@ -1,14 +1,17 @@
 /**
- * Dashboard HTTP Server
+ * Dashboard HTTP API server.
+ *
+ * Headless JSON API only (no HTML/CSS/JS UI) - the menubar app is the UI now,
+ * reading DashboardApi directly in-process. This server exists for
+ * programmatic/headless access to the same historical quota data without
+ * running the Electron app at all.
  */
 
 import type { Server } from "http";
-import { fileURLToPath } from "url";
 import { DashboardApi } from "./api.js";
 
 // Type for Express-like interface (avoiding direct dependency until added to package.json)
 interface ExpressLike {
-  use(path: string, ...handlers: any[]): void;
   get(path: string, handler: (req: any, res: any) => void | Promise<void>): void;
   listen(port: number, host: string, callback: () => void): Server;
 }
@@ -45,13 +48,6 @@ export async function startDashboardServer(
   }
 
   const app: ExpressLike = express.default();
-
-  // Serve static files (HTML/CSS/JS). fileURLToPath (not .pathname) is required
-  // here — .pathname leaves spaces percent-encoded ("%20"), which breaks path
-  // resolution/asar lookups when the app is installed under a path containing
-  // a space (e.g. the packaged macOS app's own bundle, "OpenCode Quota.app").
-  const staticPath = fileURLToPath(new URL("./public", import.meta.url));
-  app.use(express.default.static(staticPath));
 
   // API routes
   app.get("/api/dashboard/providers", async (_req: any, res: any) => {
@@ -108,8 +104,8 @@ export async function startDashboardServer(
   });
 
   const server = app.listen(port, "127.0.0.1", () => {
-    console.log(`📊 OpenCode Quota Dashboard running at http://localhost:${port}`);
-    console.log(`   Open your browser or run: open http://localhost:${port}`);
+    console.log(`📊 OpenCode Quota dashboard API running at http://localhost:${port}`);
+    console.log(`   Headless JSON API only — see /api/dashboard/* routes. Use the menubar app for a UI.`);
   });
 
   return server;

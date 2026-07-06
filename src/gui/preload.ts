@@ -121,6 +121,17 @@ const quotaApi = {
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke("shell:openExternal", { url }),
   },
+
+  // ── Dashboard History ──────────────────────────────────
+  dashboardHistory: {
+    listProviders: () => ipcRenderer.invoke("dashboardHistory:listProviders"),
+    quotaHistory: (provider: string, days?: number) =>
+      ipcRenderer.invoke("dashboardHistory:quotaHistory", { provider, days }),
+    modelBreakdown: (provider: string, days?: number) =>
+      ipcRenderer.invoke("dashboardHistory:modelBreakdown", { provider, days }),
+    weeklyResets: (provider: string, weeks?: number) =>
+      ipcRenderer.invoke("dashboardHistory:weeklyResets", { provider, weeks }),
+  },
 };
 
 // Expose to renderer

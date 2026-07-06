@@ -310,6 +310,33 @@ html, body {
   font-weight: 500;
 }
 
+/* ── History Sparkline ────────────────────────────── */
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 48px;
+  margin: 6px 0;
+}
+
+.sparkline-bar {
+  width: 6px;
+  flex-shrink: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.sparkline-bar.good {
+  background: var(--success);
+}
+
+.sparkline-bar.warning {
+  background: var(--warning);
+}
+
+.sparkline-bar.danger {
+  background: var(--danger);
+}
+
 /* ── Data Table ────────────────────────────────────── */
 .data-table {
   width: 100%;

@@ -64,10 +64,13 @@ const DASHBOARD_DEFAULT_PORT = 3939;
 async function buildQuotaDashboardCommandOutput(): Promise<string> {
   const lines: string[] = [];
   const startInstructions = [
-    "Start it:",
+    "View history in the menubar app:",
+    "  opencode-quota gui                (then open the History tab)",
+    "",
+    "Or query the headless JSON API directly (no UI):",
     "  opencode-quota dashboard          (if linked globally: pnpm link --global)",
     "  node dist/bin/dashboard.js        (from the opencode-quota repo)",
-    `  open http://localhost:${DASHBOARD_DEFAULT_PORT}`,
+    `  curl http://localhost:${DASHBOARD_DEFAULT_PORT}/api/dashboard/summary`,
   ];
 
   const dashboardApi = await getDashboardApi();
@@ -93,7 +96,6 @@ async function buildQuotaDashboardCommandOutput(): Promise<string> {
   }
 
   lines.push("");
-  lines.push("View charts:");
   lines.push(...startInstructions);
 
   return lines.join("\n");
@@ -281,7 +283,7 @@ export const QUOTA_DIALOG_COMMANDS: readonly QuotaDialogCommandSpec[] = [
     id: "quota_dashboard",
     slashName: "quota_dashboard",
     title: "OpenCode Quota Dashboard",
-    description: "Show dashboard snapshot status and how to launch the visual quota dashboard.",
+    description: "Show dashboard snapshot status and how to view quota history in the menubar app.",
     dialogSize: "xlarge",
   },
   {

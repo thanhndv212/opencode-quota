@@ -45,6 +45,11 @@ function toQuotaLimits(entries: QuotaToastEntry[]): QuotaLimit[] {
  * percent-based entry. Value-only entries (e.g. "OpenCode Go: $12.45") don't
  * carry percent/reset data and are skipped rather than represented with
  * made-up numbers.
+ *
+ * A provider with no percent entries but a fetch error (e.g. Claude CLI
+ * session expired) still gets a snapshot, carrying that error message instead
+ * of quota numbers - otherwise it silently disappears from the dashboard
+ * instead of showing an actionable "needs re-auth" state.
  */
 export function captureQuotaSnapshots(
   dashboardApi: Pick<DashboardApi, "captureSnapshot">,
@@ -52,7 +57,21 @@ export function captureQuotaSnapshots(
 ): void {
   for (const { providerId, result } of providerResults) {
     const limits = toQuotaLimits(result.entries);
-    if (limits.length === 0) continue;
+
+    if (limits.length === 0) {
+      if (result.errors.length === 0) continue;
+
+      try {
+        dashboardApi.captureSnapshot(providerId, {
+          percentRemaining: null,
+          limits: [],
+          error: result.errors[0].message,
+        });
+      } catch (err) {
+        console.error(`[dashboard] Failed to capture error snapshot for ${providerId}:`, err);
+      }
+      continue;
+    }
 
     const percentRemaining = Math.min(...limits.map((l) => 100 - l.percent));
 

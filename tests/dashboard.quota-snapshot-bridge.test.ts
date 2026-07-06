@@ -28,6 +28,14 @@ function valueResult(value: string): QuotaProviderResult {
   };
 }
 
+function errorResult(message: string): QuotaProviderResult {
+  return {
+    attempted: true,
+    errors: [{ label: "Claude", message }],
+    entries: [],
+  };
+}
+
 describe("captureQuotaSnapshots", () => {
   it("captures a snapshot per provider with percent-based entries", () => {
     const captureSnapshot = vi.fn();
@@ -81,6 +89,28 @@ describe("captureQuotaSnapshots", () => {
     );
 
     expect(captureSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("captures an error snapshot when a provider has no entries but a fetch error", () => {
+    const captureSnapshot = vi.fn();
+    captureQuotaSnapshots(
+      { captureSnapshot },
+      [
+        {
+          providerId: "anthropic",
+          result: errorResult("Claude is not authenticated. Run `claude auth login` and try again."),
+        },
+      ],
+    );
+
+    expect(captureSnapshot).toHaveBeenCalledTimes(1);
+    const [providerId, quotaData] = captureSnapshot.mock.calls[0]!;
+    expect(providerId).toBe("anthropic");
+    expect(quotaData).toEqual({
+      percentRemaining: null,
+      limits: [],
+      error: "Claude is not authenticated. Run `claude auth login` and try again.",
+    });
   });
 
   it("does not throw when captureSnapshot itself throws", () => {

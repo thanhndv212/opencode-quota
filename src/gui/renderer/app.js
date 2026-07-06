@@ -32,6 +32,16 @@
   let theme = "light";
   let showMergedTokens = false;
   let mergedTokenData = null;
+  let historyProviders = [];
+  let historyProvidersLoaded = false;
+  let historyProvider = null;
+  let historyDays = 7;
+  let historyQuota = [];
+  let historyResets = [];
+  let historySourceModels = [];
+  let historyGroupBy = "All";
+  let historyBurningSessions = [];
+  let historyBurningWindowLabel = "";
 
   // ===========================================================================
   // DOM helpers
@@ -136,6 +146,75 @@
     if (activeTab === 4) renderApiKeys();
   }
 
+  async function loadHistory() {
+    try {
+      if (!historyProvidersLoaded) {
+        historyProviders = await api.dashboardHistory.listProviders();
+        historyProvidersLoaded = true;
+        if (!historyProvider && historyProviders.length > 0) historyProvider = historyProviders[0];
+      }
+
+      if (historyProvider) {
+        const [quota, resets] = await Promise.all([
+          api.dashboardHistory.quotaHistory(historyProvider, historyDays),
+          api.dashboardHistory.weeklyResets(historyProvider, Math.max(1, Math.ceil(historyDays / 7))),
+        ]);
+        historyQuota = quota || [];
+        historyResets = resets || [];
+      } else {
+        historyQuota = [];
+        historyResets = [];
+      }
+
+      // Source-grouped model cost breakdown over the selected range - reuses
+      // the exact same aggregation + source labels as the Tokens tab, rather
+      // than the DB-backed (canonical-provider-only) breakdown, so "sort by
+      // source" (opencode/claudecode/copilot/...) actually has something to
+      // sort by.
+      const untilMs = Date.now();
+      const sinceMs = untilMs - historyDays * 24 * 60 * 60 * 1000;
+      const usage = await api.tokens.query({ sinceMs, untilMs });
+      historySourceModels = (usage.aggregate && usage.aggregate.bySourceModel) || [];
+
+      await loadHistoryBurningSessions();
+    } catch (e) { /* ignore — History tab just shows its empty state */ }
+    if (activeTab === 5) renderHistory();
+  }
+
+  function inferWindowLengthMs(label) {
+    const s = (label || "").toLowerCase();
+    if (s.includes("5h") || s.includes("5-hour") || s.includes("session")) return 5 * 60 * 60 * 1000;
+    if (s.includes("week") || s.includes("7d") || s.includes("7-day")) return 7 * 24 * 60 * 60 * 1000;
+    return null;
+  }
+
+  function findActiveBurnWindow() {
+    const latest = historyQuota.length > 0 ? historyQuota[historyQuota.length - 1] : null;
+    if (latest) {
+      for (const limit of latest.limits || []) {
+        const lenMs = inferWindowLengthMs(limit.kind) || inferWindowLengthMs(limit.group);
+        if (lenMs === 5 * 60 * 60 * 1000 && limit.resets_at) {
+          const resetsAtMs = new Date(limit.resets_at).getTime();
+          if (Number.isFinite(resetsAtMs)) {
+            return { sinceMs: resetsAtMs - lenMs, label: "Current 5-Hour Window" };
+          }
+        }
+      }
+    }
+    return { sinceMs: Date.now() - 5 * 60 * 60 * 1000, label: "Last 5 Hours" };
+  }
+
+  async function loadHistoryBurningSessions() {
+    const windowInfo = findActiveBurnWindow();
+    historyBurningWindowLabel = windowInfo.label;
+    try {
+      const usage = await api.tokens.query({ sinceMs: windowInfo.sinceMs, untilMs: Date.now() });
+      historyBurningSessions = (usage.aggregate && usage.aggregate.bySession) || [];
+    } catch (e) {
+      historyBurningSessions = [];
+    }
+  }
+
   function setLoading(v) {
     isLoading = v;
     const btn = $(".btn-refresh");
@@ -168,6 +247,7 @@
       case 2: renderAlertsInto(container); break;
       case 3: renderPricingInto(container); break;
       case 4: renderApiKeysInto(container); break;
+      case 5: renderHistoryInto(container); break;
     }
   }
 
@@ -194,18 +274,6 @@
       el("h1", {}, "Quota Monitor"),
       el("div", { className: "header-actions" },
         el("button", { className: "btn btn-small btn-refresh", onClick: refreshQuota }, "⟳ Refresh"),
-        el("button", { 
-          className: "btn btn-small", 
-          onClick: async () => {
-            try {
-              await api.shell.openExternal("http://localhost:3939");
-              showToast("Opening dashboard... (starting server if needed)", "success");
-            } catch (err) {
-              showToast("Failed to open dashboard: " + err.message, "error");
-            }
-          },
-          title: "Open historical dashboard in browser (auto-starts server)"
-        }, "📊 Dashboard"),
         el("button", { className: "btn btn-small", onClick: toggleTheme, title: themeTitle }, themeLabel),
         el("button", { className: "btn-icon", onClick: () => api.app.quit(), title: "Quit" }, "✕"),
       ),
@@ -221,6 +289,7 @@
     { label: "⚠ Alerts", title: "Budget Alerts" },
     { label: "$ Pricing", title: "Pricing" },
     { label: "🔑 API Keys", title: "API Keys" },
+    { label: "📈 History", title: "Quota History" },
   ];
 
   function getActiveTabTitle() {
@@ -240,6 +309,7 @@
           if (i === 2) loadAlerts();
           if (i === 3) loadPricing();
           if (i === 4) loadApikeyStatus();
+          if (i === 5) loadHistory();
         },
       }, tab.label));
     });
@@ -349,6 +419,16 @@
 
     const entries = quotaData.entries || [];
     const providerIds = quotaData.detectedProviderIds || [];
+    const errors = quotaData.errors || [];
+
+    // Surface provider-level errors (e.g. Claude CLI session expired) instead
+    // of letting the provider silently vanish from the list below.
+    for (const err of errors) {
+      container.appendChild(el("div", { className: "alert-indicator triggered", style: { marginBottom: "8px" } },
+        el("span", {}, "⚠"),
+        el("span", {}, (err.label ? err.label + ": " : "") + err.message),
+      ));
+    }
 
     // Filter
     const filterBar = el("div", { className: "filter-bar" });
@@ -1034,6 +1114,326 @@
   }
 
   function renderApiKeys() { const c = $(".tab-content"); if (c) { clear(c); renderApiKeysInto(c); } }
+
+  // ===========================================================================
+  // History
+  // ===========================================================================
+
+  function renderBurndownSparkline(points) {
+    if (!points || points.length === 0) {
+      return el("div", { className: "hint", style: { fontSize: "11px", color: "var(--text-muted)" } }, "No history yet for this range.");
+    }
+
+    const recent = points.slice(-30); // cap width to what fits the popup
+    const row = el("div", { className: "sparkline" });
+    recent.forEach((s) => {
+      const remaining = Math.max(0, Math.min(100, s.percentRemaining ?? 0));
+      const used = 100 - remaining;
+      let barClass = "good";
+      if (used >= 90) barClass = "danger";
+      else if (used >= 75) barClass = "warning";
+
+      row.appendChild(el("div", {
+        className: "sparkline-bar " + barClass,
+        style: { height: Math.max(4, Math.round((remaining / 100) * 48)) + "px" },
+        title: new Date(s.timestamp).toLocaleString() + " — " + Math.round(remaining) + "% remaining",
+      }));
+    });
+    return row;
+  }
+
+  /**
+   * Splits the collapsed (worst-window-wins) quota_snapshots time series
+   * back out into one series per limit kind (e.g. "5h:" vs "Weekly:"), so
+   * burn-rate can be computed per window instead of across mismatched kinds.
+   */
+  function groupQuotaSnapshotsByKind(snapshots) {
+    const byKind = new Map();
+    (snapshots || []).forEach((snap) => {
+      (snap.limits || []).forEach((limit) => {
+        const key = limit.kind || limit.group || "quota";
+        if (!byKind.has(key)) byKind.set(key, { group: limit.group || key, points: [] });
+        byKind.get(key).points.push({
+          timestamp: snap.timestamp,
+          percentRemaining: 100 - limit.percent,
+          resetTimeIso: limit.resets_at,
+        });
+      });
+    });
+    byKind.forEach((entry) => entry.points.sort((a, b) => a.timestamp - b.timestamp));
+    return byKind;
+  }
+
+  function formatDuration(minutes) {
+    if (!Number.isFinite(minutes) || minutes < 0) return "—";
+    const totalMin = Math.round(minutes);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h > 0 ? h + "h " + m + "m" : m + "m";
+  }
+
+  /**
+   * Burn rate (%/min from the last two same-kind snapshots), pace comparison
+   * (actual used% vs. a steady straight-line burn to the next reset), and a
+   * simple "runs out before reset" / "safe until reset" projection.
+   * Returns null when there isn't enough data to say anything meaningful.
+   */
+  function computeBurnStats(points, windowLengthMs) {
+    if (!points || points.length === 0) return null;
+    const latest = points[points.length - 1];
+    const stats = {
+      percentRemaining: latest.percentRemaining,
+      resetTimeIso: latest.resetTimeIso,
+      burnPerMin: null,
+      pacePercent: null,
+      paceDeltaPp: null,
+      projectionText: null,
+    };
+
+    if (points.length >= 2) {
+      const prev = points[points.length - 2];
+      const deltaMin = (latest.timestamp - prev.timestamp) / 60000;
+      const usedDelta = prev.percentRemaining - latest.percentRemaining; // + = consumed since prev
+      if (deltaMin > 0 && usedDelta >= 0) {
+        stats.burnPerMin = usedDelta / deltaMin;
+      }
+    }
+
+    const resetsAtMs = latest.resetTimeIso ? new Date(latest.resetTimeIso).getTime() : NaN;
+    if (Number.isFinite(resetsAtMs) && windowLengthMs) {
+      const windowStartMs = resetsAtMs - windowLengthMs;
+      const elapsedFraction = Math.min(1, Math.max(0, (Date.now() - windowStartMs) / windowLengthMs));
+      stats.pacePercent = elapsedFraction * 100;
+      const actualUsedPercent = 100 - latest.percentRemaining;
+      stats.paceDeltaPp = Math.round(actualUsedPercent - stats.pacePercent);
+
+      const minutesToReset = (resetsAtMs - Date.now()) / 60000;
+      if (stats.burnPerMin != null && stats.burnPerMin > 0 && minutesToReset > 0) {
+        const minutesToEmpty = latest.percentRemaining / stats.burnPerMin;
+        if (minutesToEmpty < minutesToReset) {
+          stats.projectionText = "Runs out in " + formatDuration(minutesToEmpty) + " (before reset)";
+        } else {
+          const projRemaining = Math.max(0, latest.percentRemaining - stats.burnPerMin * minutesToReset);
+          stats.projectionText = "Safe until reset (proj " + Math.round(projRemaining) + "% left)";
+        }
+      }
+    }
+
+    return stats;
+  }
+
+  function renderBurnCard(kindLabel, entry) {
+    const card = el("div", { className: "card" });
+    card.appendChild(el("div", { className: "card-title" }, (entry.group || kindLabel).replace(/:+$/, "") + " Burn-down"));
+    card.appendChild(renderBurndownSparkline(entry.points));
+
+    const windowLengthMs = inferWindowLengthMs(kindLabel) || inferWindowLengthMs(entry.group);
+    const stats = computeBurnStats(entry.points, windowLengthMs);
+    if (stats) {
+      const line1 = [Math.round(stats.percentRemaining) + "% left"];
+      if (stats.burnPerMin != null) {
+        line1.push("burn " + stats.burnPerMin.toFixed(2) + "%/min (" + (stats.burnPerMin * 60).toFixed(1) + "%/hr)");
+      }
+      const resetsAtMs = stats.resetTimeIso ? new Date(stats.resetTimeIso).getTime() : NaN;
+      if (Number.isFinite(resetsAtMs)) {
+        line1.push("reset in " + formatDuration((resetsAtMs - Date.now()) / 60000));
+      }
+      card.appendChild(el("div", { style: { fontSize: "11px", color: "var(--text-secondary)", marginTop: "6px" } }, line1.join(" · ")));
+
+      if (stats.paceDeltaPp != null) {
+        const dir = stats.paceDeltaPp >= 0 ? "ahead of" : "behind";
+        const line2 = "Used " + Math.round(100 - stats.percentRemaining) + "% vs " + Math.round(stats.pacePercent) + "% pace (" +
+          (stats.paceDeltaPp >= 0 ? "+" : "") + stats.paceDeltaPp + "pp " + dir + " steady burn)";
+        card.appendChild(el("div", { style: { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" } }, line2));
+      }
+      if (stats.projectionText) {
+        card.appendChild(el("div", { style: { fontSize: "11px", color: "var(--text-muted)", marginTop: "2px" } }, stats.projectionText));
+      }
+    }
+    return card;
+  }
+
+  function renderModelSourceBreakdown(container) {
+    const card = el("div", { className: "card" });
+    const header = el("div", { className: "card-header" });
+    header.appendChild(el("span", { className: "card-title" }, "Model Cost Breakdown"));
+    card.appendChild(header);
+
+    if (!historySourceModels || historySourceModels.length === 0) {
+      card.appendChild(el("div", { className: "hint", style: { fontSize: "11px", color: "var(--text-muted)" } }, "No usage recorded for this range."));
+      container.appendChild(card);
+      return;
+    }
+
+    const bySource = new Map();
+    historySourceModels.forEach((row) => {
+      const src = normalizeSourceName(row.sourceProviderID);
+      if (!bySource.has(src)) bySource.set(src, []);
+      bySource.get(src).push(row);
+    });
+    const sources = [...bySource.keys()].sort((a, b) => {
+      const ka = sourceSortKey(a), kb = sourceSortKey(b);
+      return ka !== kb ? ka - kb : a.localeCompare(b);
+    });
+    if (!sources.includes(historyGroupBy)) historyGroupBy = "All";
+
+    const groupSelect = el("select", {
+      className: "filter-select",
+      onChange: (e) => { historyGroupBy = e.target.value; renderHistory(); },
+    });
+    ["All", ...sources].forEach((s) => {
+      const opt = el("option", { value: s }, s === "All" ? "All sources" : s);
+      if (s === historyGroupBy) opt.setAttribute("selected", "");
+      groupSelect.appendChild(opt);
+    });
+    card.appendChild(el("div", { className: "filter-bar", style: { padding: "0 0 4px 0" } }, groupSelect));
+
+    const rows = historyGroupBy === "All"
+      ? historySourceModels.map((r) => ({ label: normalizeSourceName(r.sourceProviderID) + "/" + r.sourceModelID, costUsd: r.costUsd }))
+      : bySource.get(historyGroupBy).map((r) => ({ label: r.sourceModelID, costUsd: r.costUsd }));
+    rows.sort((a, b) => (b.costUsd || 0) - (a.costUsd || 0));
+
+    const wrap = el("div", { style: { marginTop: "8px" } });
+    const maxCost = Math.max(...rows.map((r) => r.costUsd || 0), 0.0001);
+    rows.slice(0, 8).forEach((r) => {
+      const row = el("div", { style: { marginBottom: "6px" } });
+      row.appendChild(el("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "2px" } },
+        el("span", {}, r.label),
+        el("span", { style: { fontFamily: "var(--font-mono)" } }, fmtUsd(r.costUsd || 0)),
+      ));
+      const barWrap = el("div", { className: "percent-bar-container" });
+      const pct = Math.max(2, Math.round(((r.costUsd || 0) / maxCost) * 100));
+      barWrap.appendChild(el("div", { className: "percent-bar-fill good", style: { width: pct + "%" } }));
+      row.appendChild(barWrap);
+      wrap.appendChild(row);
+    });
+    card.appendChild(wrap);
+    container.appendChild(card);
+  }
+
+  function renderBurningSessionsCard(container) {
+    const card = el("div", { className: "card" });
+    card.appendChild(el("div", { className: "card-title" }, "What's Burning Your Quota"));
+    card.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px" } },
+      "Local sessions ranked by weighted tokens in the " + historyBurningWindowLabel.toLowerCase() + " (this machine only, approximate)."));
+
+    const sessions = (historyBurningSessions || []).filter((s) => (s.tokens && (s.tokens.input || s.tokens.output)));
+    if (sessions.length === 0) {
+      card.appendChild(el("div", { className: "hint", style: { fontSize: "11px", color: "var(--text-muted)" } }, "No active sessions in this window."));
+      container.appendChild(card);
+      return;
+    }
+
+    const weight = (s) => (s.tokens.input || 0) + (s.tokens.output || 0) + (s.tokens.cache_write || 0) + (s.tokens.cache_read || 0) * 0.1;
+    const ranked = sessions.map((s) => ({ ...s, weight: weight(s) })).sort((a, b) => b.weight - a.weight);
+    const totalWeight = ranked.reduce((sum, s) => sum + s.weight, 0) || 1;
+
+    ranked.slice(0, 5).forEach((s) => {
+      const row = el("div", { style: { marginBottom: "8px" } });
+      const title = s.title || ("Session " + String(s.sessionID || "").slice(0, 8));
+      row.appendChild(el("div", { style: { fontSize: "11px", marginBottom: "2px" } }, title));
+      const pct = Math.round((s.weight / totalWeight) * 100);
+      row.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)" } },
+        pct + "% of local burn · " + fmtCompact(s.weight) + " weighted tokens · " + formatNumber(s.messageCount || 0) + " msgs"));
+      const barWrap = el("div", { className: "percent-bar-container" });
+      barWrap.appendChild(el("div", { className: "percent-bar-fill good", style: { width: Math.max(2, pct) + "%" } }));
+      row.appendChild(barWrap);
+      card.appendChild(row);
+    });
+    container.appendChild(card);
+  }
+
+  function renderResetHistoryList(resets) {
+    if (!resets || resets.length === 0) {
+      return el("div", { className: "hint", style: { fontSize: "11px", color: "var(--text-muted)" } }, "No resets recorded yet.");
+    }
+
+    const wrap = el("div", {});
+    const capped = resets.filter((r) => (r.quota_used || 0) >= 99).length;
+    wrap.appendChild(el("div", { style: { fontSize: "10px", color: "var(--text-muted)", marginBottom: "6px" } },
+      capped + " of " + resets.length + " window(s) fully capped (≥99% used)"));
+
+    resets.slice(0, 6).forEach((r) => {
+      const used = Math.round(r.quota_used || 0);
+      const left = Math.round(r.quota_remaining ?? (100 - used));
+      wrap.appendChild(renderKV(
+        new Date(r.reset_at).toLocaleDateString() + " · " + r.reset_type,
+        used + "% used · " + left + "% left unused",
+      ));
+    });
+    return wrap;
+  }
+
+  function renderHistoryInto(container) {
+    if (!historyProvidersLoaded) {
+      container.appendChild(el("div", { className: "empty-state" },
+        el("div", { className: "icon" }, "📈"),
+        el("div", { className: "text" }, "Loading history..."),
+      ));
+      return;
+    }
+
+    if (historyProviders.length === 0) {
+      container.appendChild(el("div", { className: "empty-state" },
+        el("div", { className: "icon" }, "📈"),
+        el("div", { className: "text" }, "No quota history yet"),
+        el("div", { className: "hint" }, "Snapshots are captured automatically whenever quota is checked."),
+      ));
+      return;
+    }
+
+    const controls = el("div", { className: "filter-bar" });
+
+    const providerSelect = el("select", {
+      className: "filter-select",
+      onChange: (e) => { historyProvider = e.target.value; loadHistory(); },
+    });
+    historyProviders.forEach((p) => {
+      const opt = el("option", { value: p }, normalizeSourceName(p));
+      if (p === historyProvider) opt.setAttribute("selected", "");
+      providerSelect.appendChild(opt);
+    });
+    controls.appendChild(providerSelect);
+
+    const rangeSelect = el("select", {
+      className: "filter-select",
+      onChange: (e) => { historyDays = parseInt(e.target.value, 10); loadHistory(); },
+    });
+    [[7, "Last 7 days"], [30, "Last 30 days"]].forEach(([val, label]) => {
+      const opt = el("option", { value: String(val) }, label);
+      if (val === historyDays) opt.setAttribute("selected", "");
+      rangeSelect.appendChild(opt);
+    });
+    controls.appendChild(rangeSelect);
+
+    container.appendChild(controls);
+
+    const byKind = groupQuotaSnapshotsByKind(historyQuota);
+    if (byKind.size === 0) {
+      const card = el("div", { className: "card" });
+      card.appendChild(el("div", { className: "card-title" }, "Quota Burn-down"));
+      card.appendChild(renderBurndownSparkline([]));
+      container.appendChild(card);
+    } else {
+      // 5h-like windows first (fastest-moving, most actionable), then the rest.
+      const kinds = [...byKind.keys()].sort((a, b) => {
+        const la = inferWindowLengthMs(a) ?? Infinity;
+        const lb = inferWindowLengthMs(b) ?? Infinity;
+        return la - lb;
+      });
+      kinds.forEach((k) => container.appendChild(renderBurnCard(k, byKind.get(k))));
+    }
+
+    renderBurningSessionsCard(container);
+    renderModelSourceBreakdown(container);
+
+    const resetCard = el("div", { className: "card" });
+    resetCard.appendChild(el("div", { className: "card-title" }, "Reset History"));
+    resetCard.appendChild(renderResetHistoryList(historyResets));
+    container.appendChild(resetCard);
+  }
+
+  function renderHistory() { const c = $(".tab-content"); if (c) { clear(c); renderHistoryInto(c); } }
 
   function showInitStoreModal() {
     showPassphraseModal("Create API Key Store", "Set a master passphrase to encrypt your API keys at rest.", async (pass) => {

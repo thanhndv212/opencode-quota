@@ -10,7 +10,7 @@
  *   opencode-quota gui              # Alternative invocation
  */
 
-import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, dialog, shell } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, shell } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
@@ -20,6 +20,7 @@ import { DEFAULT_CONFIG } from "../lib/types.js";
 import { getGuiConfig, updateGuiConfig, updateWindowBounds, type GuiConfig } from "../lib/gui-config.js";
 import { preloadUserPricing } from "../lib/user-pricing.js";
 import { preloadBudgetAlerts } from "../lib/budget-alerts.js";
+import { fixGuiProcessPath } from "../lib/fix-gui-path.js";
 
 // IPC handlers
 import * as quotaIpc from "./ipc/quota.js";
@@ -27,6 +28,7 @@ import * as tokensIpc from "./ipc/tokens.js";
 import * as pricingIpc from "./ipc/pricing.js";
 import * as alertsIpc from "./ipc/alerts.js";
 import * as apikeysIpc from "./ipc/apikeys.js";
+import * as dashboardHistoryIpc from "./ipc/dashboard-history.js";
 
 // =============================================================================
 // Constants
@@ -37,58 +39,6 @@ const __dirname = path.dirname(__filename);
 
 const APP_NAME = "OpenCode Quota";
 const RENDERER_HTML = "renderer/index.html";
-const DASHBOARD_PORT = 3939;
-const DASHBOARD_URL = `http://localhost:${DASHBOARD_PORT}`;
-
-// =============================================================================
-// Dashboard server (in-process)
-// =============================================================================
-//
-// Runs the same Express app the standalone `opencode-quota dashboard` CLI
-// uses, directly inside this process — not spawned as a child process.
-//
-// Why not just `import` DashboardApi with better-sqlite3 like the CLI does:
-// better-sqlite3 is a native module compiled against system Node's ABI, and
-// Electron's bundled V8/Node uses a different one. A real `npmRebuild: true`
-// packaging attempt confirmed better-sqlite3 12.10.0's C++ source doesn't
-// even compile against Electron 42's V8 headers. So this uses a read-only
-// sql.js (WASM SQLite, no native module) adapter instead — see
-// dashboard/sqljs-database.ts. The plugin process remains the sole writer,
-// via better-sqlite3 in its own real-Node process (dashboard-instance.ts);
-// this adapter re-reads the file whenever its mtime changes, so it reflects
-// the plugin's latest writes without two engines ever writing concurrently.
-
-let dashboardServerStarted: Promise<void> | null = null;
-
-function ensureDashboardServerStarted(): Promise<void> {
-  if (!dashboardServerStarted) {
-    dashboardServerStarted = (async () => {
-      const [{ getOpenCodeDbPath }, { SqlJsDatabaseAdapter }, { DashboardApi }, { startDashboardServer: startExpressServer }] =
-        await Promise.all([
-          import("../lib/opencode-storage.js"),
-          import("../dashboard/sqljs-database.js"),
-          import("../dashboard/api.js"),
-          import("../dashboard/server.js"),
-        ]);
-
-      const openCodeDbPath = getOpenCodeDbPath();
-      if (!openCodeDbPath) {
-        throw new Error("OpenCode data directory not found — is opencode installed?");
-      }
-      const dashboardDbPath = path.join(path.dirname(openCodeDbPath), "quota-dashboard.db");
-
-      const adapter = await SqlJsDatabaseAdapter.open(dashboardDbPath);
-      const dashboardApi = new DashboardApi(adapter as any);
-
-      await startExpressServer({ port: DASHBOARD_PORT, dashboardApi });
-      console.log(`Dashboard server started in-process at ${DASHBOARD_URL}`);
-    })().catch((err) => {
-      dashboardServerStarted = null; // allow retry on next open attempt
-      throw err;
-    });
-  }
-  return dashboardServerStarted;
-}
 
 // =============================================================================
 // Linux sandbox workaround
@@ -345,19 +295,24 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
 
   // ── Shell ──────────────────────────────────────────
   ipcMain.handle("shell:openExternal", async (_event, params: { url: string }) => {
-    // If opening dashboard URL, ensure the in-process server has started first
-    if (params.url.startsWith(DASHBOARD_URL)) {
-      try {
-        await ensureDashboardServerStarted();
-      } catch (err) {
-        dialog.showErrorBox(
-          "Dashboard Server Error",
-          `Failed to start dashboard server:\n${(err as Error).message}`
-        );
-        throw err;
-      }
-    }
     return shell.openExternal(params.url);
+  });
+
+  // ── Dashboard History ──────────────────────────────
+  ipcMain.handle("dashboardHistory:listProviders", async () => {
+    return dashboardHistoryIpc.listProviders();
+  });
+
+  ipcMain.handle("dashboardHistory:quotaHistory", async (_event, params: { provider: string; days?: number }) => {
+    return dashboardHistoryIpc.getQuotaHistory(params);
+  });
+
+  ipcMain.handle("dashboardHistory:modelBreakdown", async (_event, params: { provider: string; days?: number }) => {
+    return dashboardHistoryIpc.getModelBreakdown(params);
+  });
+
+  ipcMain.handle("dashboardHistory:weeklyResets", async (_event, params: { provider: string; weeks?: number }) => {
+    return dashboardHistoryIpc.getWeeklyResets(params);
   });
 }
 
@@ -456,6 +411,12 @@ function toggleWindow() {
 // =============================================================================
 
 app.whenReady().then(async () => {
+  // Fix PATH first: launched via Finder/Dock/Spotlight, this process only
+  // has macOS's bare default PATH, so CLI-based providers (Claude Code CLI
+  // installed via Homebrew on Apple Silicon, etc.) would otherwise silently
+  // look "not installed" for every check this process ever makes.
+  await fixGuiProcessPath();
+
   // Load configuration
   const guiConfig = await getGuiConfig();
   const quotaConfig = await loadQuotaConfig();
@@ -494,21 +455,6 @@ app.whenReady().then(async () => {
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send("app:refresh");
           }
-        },
-      },
-      {
-        label: "Open Dashboard",
-        click: async () => {
-          try {
-            await ensureDashboardServerStarted();
-          } catch (err) {
-            dialog.showErrorBox(
-              "Dashboard Server Error",
-              `Failed to start dashboard server:\n${(err as Error).message}`
-            );
-            return;
-          }
-          shell.openExternal(DASHBOARD_URL);
         },
       },
       { type: "separator" },

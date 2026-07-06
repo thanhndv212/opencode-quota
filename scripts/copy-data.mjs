@@ -10,18 +10,6 @@ const files = [
     src: join("src", "dashboard", "schema.sql"),
     dst: join("dist", "dashboard", "schema.sql"),
   },
-  {
-    src: join("src", "dashboard", "public", "index.html"),
-    dst: join("dist", "dashboard", "public", "index.html"),
-  },
-  {
-    src: join("src", "dashboard", "public", "styles.css"),
-    dst: join("dist", "dashboard", "public", "styles.css"),
-  },
-  {
-    src: join("src", "dashboard", "public", "dashboard.js"),
-    dst: join("dist", "dashboard", "public", "dashboard.js"),
-  },
 ];
 
 for (const f of files) {

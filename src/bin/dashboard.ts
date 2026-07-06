@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * CLI entry point for dashboard server
+ * CLI entry point for the headless dashboard JSON API server (no UI - use
+ * the menubar app to view quota history; this is for programmatic/headless
+ * access to the same data).
  * Usage: opencode-quota dashboard [--port 3939]
  */
 
