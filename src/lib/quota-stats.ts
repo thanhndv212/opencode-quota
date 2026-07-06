@@ -7,6 +7,7 @@ import {
   readAllSessionsIndex,
   SessionNotFoundError,
 } from "./opencode-storage.js";
+import { iterClaudeCodeCliMessages } from "./claude-code-cli-storage.js";
 import {
   hasCost,
   hasProvider,
@@ -610,7 +611,16 @@ export async function aggregateUsage(params: {
       untilMs: params.untilMs,
     });
   } else {
-    messages = await iterAssistantMessages({ sinceMs: params.sinceMs, untilMs: params.untilMs });
+    // Global (unfiltered-by-session) view: also fold in the standalone
+    // Claude Code CLI's own local transcripts, which OpenCode's own message
+    // store never sees. Session-scoped calls above intentionally skip this -
+    // OpenCode session ids and Claude CLI session ids are different
+    // namespaces, so there's no "this OpenCode session" equivalent for them.
+    const [openCodeMessages, claudeCliMessages] = await Promise.all([
+      iterAssistantMessages({ sinceMs: params.sinceMs, untilMs: params.untilMs }),
+      iterClaudeCodeCliMessages({ sinceMs: params.sinceMs, untilMs: params.untilMs }),
+    ]);
+    messages = [...openCodeMessages, ...claudeCliMessages];
   }
   const sessionsIdx = await readAllSessionsIndex();
 

@@ -23,6 +23,10 @@ vi.mock("../src/lib/opencode-storage.js", () => {
   };
 });
 
+vi.mock("../src/lib/claude-code-cli-storage.js", () => ({
+  iterClaudeCodeCliMessages: vi.fn(() => Promise.resolve([])),
+}));
+
 vi.mock("../src/lib/modelsdev-pricing.js", () => ({
   hasCost: vi.fn(
     (providerID: string, modelID: string) => providerID === "openai" && modelID === "gpt-5",
@@ -309,5 +313,60 @@ describe("aggregateUsage session scoping", () => {
         tokens: expect.objectContaining({ input: 7, output: 2 }),
       }),
     ]);
+  });
+});
+
+describe("aggregateUsage global view merges Claude Code CLI messages", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("folds standalone Claude Code CLI transcript usage into the global (non-session-scoped) aggregate", async () => {
+    const storage = await import("../src/lib/opencode-storage.js");
+    const claudeCliStorage = await import("../src/lib/claude-code-cli-storage.js");
+
+    (storage.readAllSessionsIndex as any).mockResolvedValue({});
+    (storage.iterAssistantMessages as any).mockResolvedValue([
+      {
+        sessionID: "ses_opencode",
+        role: "assistant",
+        providerID: "openai",
+        modelID: "gpt-5",
+        tokens: { input: 10, output: 5, reasoning: 0, cache: { read: 0, write: 0 } },
+      },
+    ]);
+    (claudeCliStorage.iterClaudeCodeCliMessages as any).mockResolvedValue([
+      {
+        id: "claude-cli:abc:0",
+        sessionID: "abc",
+        role: "assistant",
+        providerID: "anthropic",
+        modelID: "claude-sonnet-4-6",
+        tokens: { input: 20, output: 8, reasoning: 0, cache: { read: 0, write: 0 } },
+      },
+    ]);
+
+    const result = await aggregateUsage({ sinceMs: 100, untilMs: 200 });
+
+    expect(storage.iterAssistantMessages).toHaveBeenCalledWith({ sinceMs: 100, untilMs: 200 });
+    expect(claudeCliStorage.iterClaudeCodeCliMessages).toHaveBeenCalledWith({
+      sinceMs: 100,
+      untilMs: 200,
+    });
+    // One message from each source landed in the aggregate.
+    expect(result.totals.messageCount).toBe(2);
+    expect(result.totals.sessionCount).toBe(2);
+  });
+
+  it("does not consult Claude Code CLI transcripts for session-scoped aggregation", async () => {
+    const storage = await import("../src/lib/opencode-storage.js");
+    const claudeCliStorage = await import("../src/lib/claude-code-cli-storage.js");
+
+    (storage.readAllSessionsIndex as any).mockResolvedValue({});
+    (storage.iterAssistantMessagesForSession as any).mockResolvedValue([]);
+
+    await aggregateUsage({ sessionID: "ses_root" });
+
+    expect(claudeCliStorage.iterClaudeCodeCliMessages).not.toHaveBeenCalled();
   });
 });
