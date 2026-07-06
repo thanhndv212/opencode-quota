@@ -36,6 +36,7 @@ export const anthropicProvider: QuotaProvider = {
 
     return await hasAnthropicCredentialsConfigured({
       binaryPath: ctx.config?.anthropicBinaryPath,
+      bypassCache: ctx.config?.bypassCache,
     });
   },
 
@@ -47,6 +48,7 @@ export const anthropicProvider: QuotaProvider = {
     const result = await queryAnthropicQuota({
       binaryPath: ctx.config?.anthropicBinaryPath,
       requestTimeoutMs: ctx.config?.requestTimeoutMs,
+      bypassCache: ctx.config?.bypassCache,
     });
 
     if (!result) {

@@ -154,6 +154,29 @@ describe("anthropic provider", () => {
     });
   });
 
+  it("forwards ctx.config.bypassCache so a manual refresh re-probes Claude CLI auth immediately", async () => {
+    const { hasAnthropicCredentialsConfigured, queryAnthropicQuota } = await import(
+      "../src/lib/anthropic.js"
+    );
+    (hasAnthropicCredentialsConfigured as any).mockResolvedValue(true);
+    (queryAnthropicQuota as any).mockResolvedValueOnce(null);
+
+    const ctx = createProviderAvailabilityContext({
+      providerIds: [],
+      configOverrides: { bypassCache: true },
+    });
+
+    await anthropicProvider.isAvailable(ctx);
+    expect(hasAnthropicCredentialsConfigured).toHaveBeenCalledWith(
+      expect.objectContaining({ bypassCache: true }),
+    );
+
+    await anthropicProvider.fetch(ctx);
+    expect(queryAnthropicQuota).toHaveBeenCalledWith(
+      expect.objectContaining({ bypassCache: true }),
+    );
+  });
+
   it("is not available when neither OpenCode config nor Claude CLI auth is present", async () => {
     const { hasAnthropicCredentialsConfigured } = await import("../src/lib/anthropic.js");
     (hasAnthropicCredentialsConfigured as any).mockResolvedValue(false);

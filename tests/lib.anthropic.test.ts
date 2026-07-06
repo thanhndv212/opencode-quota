@@ -267,8 +267,13 @@ describe("Claude CLI diagnostics", () => {
       checkedCommands: ["claude --version"],
       message: "Claude CLI (`claude`) is not installed or not on PATH.",
     });
+    // Not installed at all: isAvailable() gates on this and hides the
+    // provider entirely, so no error needs to reach the UI here.
     await expect(hasAnthropicCredentialsConfigured()).resolves.toBe(false);
-    await expect(queryAnthropicQuota()).resolves.toBeNull();
+    await expect(queryAnthropicQuota()).resolves.toEqual({
+      success: false,
+      error: "Claude CLI (`claude`) is not installed or not on PATH.",
+    });
   });
 
   it("uses a configured Claude binary path for probe commands", async () => {
@@ -305,8 +310,13 @@ describe("Claude CLI diagnostics", () => {
     expect(diagnostics.authStatus).toBe("unauthenticated");
     expect(diagnostics.quotaSupported).toBe(false);
     expect(diagnostics.message).toContain("claude auth login");
-    await expect(hasAnthropicCredentialsConfigured()).resolves.toBe(false);
-    await expect(queryAnthropicQuota()).resolves.toBeNull();
+    // Installed but session expired: stays "available" so the UI surfaces an
+    // actionable re-auth error instead of the provider silently vanishing.
+    await expect(hasAnthropicCredentialsConfigured()).resolves.toBe(true);
+    await expect(queryAnthropicQuota()).resolves.toEqual({
+      success: false,
+      error: expect.stringContaining("claude auth login"),
+    });
   });
 
   it("returns quota data when Claude auth status JSON includes quota windows", async () => {
@@ -822,6 +832,64 @@ describe("Claude CLI diagnostics", () => {
     const third = await getAnthropicDiagnostics();
     expect(third.quota?.five_hour.percentRemaining).toBe(70);
     expect(execFileMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("bypassCache re-probes immediately instead of waiting out the cache or an app relaunch", async () => {
+    mockExecSequence([
+      { stdout: "claude 1.2.3\n" },
+      { code: 1, stderr: "Not logged in. Run `claude auth login` to continue." },
+      { stdout: "claude 1.2.3\n" },
+      {
+        stdout: JSON.stringify({
+          authenticated: true,
+          quota: {
+            five_hour: { used_percentage: 30 },
+            seven_day: { used_percentage: 40 },
+          },
+        }),
+      },
+    ]);
+
+    const beforeLogin = await getAnthropicDiagnostics();
+    expect(beforeLogin.authStatus).toBe("unauthenticated");
+
+    // Without bypassCache, a call an instant later (e.g. right after
+    // `claude auth login` finishes) would normally still hit the 5s cache
+    // and report stale unauthenticated state.
+    const afterLoginBypassed = await getAnthropicDiagnostics({ bypassCache: true });
+    expect(afterLoginBypassed.authStatus).toBe("authenticated");
+    expect(afterLoginBypassed.quota?.five_hour.percentRemaining).toBe(70);
+    expect(execFileMock).toHaveBeenCalledTimes(4);
+  });
+
+  it("hasAnthropicCredentialsConfigured and queryAnthropicQuota forward bypassCache", async () => {
+    mockExecSequence([
+      { stdout: "claude 1.2.3\n" },
+      { code: 1, stderr: "Not logged in. Run `claude auth login` to continue." },
+      { stdout: "claude 1.2.3\n" },
+      {
+        stdout: JSON.stringify({
+          authenticated: true,
+          quota: {
+            five_hour: { used_percentage: 15 },
+            seven_day: { used_percentage: 25 },
+          },
+        }),
+      },
+    ]);
+
+    await hasAnthropicCredentialsConfigured();
+    const quotaBefore = await queryAnthropicQuota();
+    expect(quotaBefore).toEqual({
+      success: false,
+      error: expect.stringContaining("claude auth login"),
+    });
+
+    const quotaAfter = await queryAnthropicQuota({ bypassCache: true });
+    expect(quotaAfter).toMatchObject({
+      success: true,
+      five_hour: { percentRemaining: 85 },
+    });
   });
 
   it("caches fallback-backed diagnostics until the test helper clears the cache", async () => {

@@ -15,7 +15,10 @@ export interface QuotaFetchResult {
   detectedProviderIds: string[];
 }
 
-function buildMinimalProviderContext(config: QuotaToastConfig): QuotaProviderContext {
+function buildMinimalProviderContext(
+  config: QuotaToastConfig,
+  bypassCache: boolean,
+): QuotaProviderContext {
   return {
     client: {
       config: {
@@ -33,6 +36,7 @@ function buildMinimalProviderContext(config: QuotaToastConfig): QuotaProviderCon
       opencodeGoWindows: config.opencodeGoWindows,
       requestTimeoutMs: config.requestTimeoutMs,
       enabledProviders: config.enabledProviders,
+      bypassCache,
     },
   };
 }
@@ -47,7 +51,7 @@ export async function fetchAllQuota(
 ): Promise<QuotaFetchResult> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const providers = getProviders();
-  const ctx = buildMinimalProviderContext(mergedConfig);
+  const ctx = buildMinimalProviderContext(mergedConfig, bypassCache);
 
   const entries: QuotaToastEntry[] = [];
   const errors: QuotaToastError[] = [];

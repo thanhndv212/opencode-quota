@@ -127,6 +127,14 @@ export interface QuotaProviderContext {
     currentModel?: string;
     currentProviderID?: string;
     enabledProviders: string[] | "auto";
+    /**
+     * Set on an explicit user-triggered refresh. Providers with their own
+     * internal caching layer (beyond the generic per-provider result cache in
+     * quota-state.ts) should use this to force a fresh probe - e.g. Anthropic
+     * re-checking Claude CLI auth status right after `claude auth login`
+     * instead of waiting out its own cache or requiring an app relaunch.
+     */
+    bypassCache?: boolean;
   };
 }
 

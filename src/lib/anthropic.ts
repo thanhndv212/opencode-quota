@@ -77,6 +77,14 @@ export interface AnthropicDiagnostics {
 export interface AnthropicProbeOptions {
   binaryPath?: string;
   requestTimeoutMs?: number;
+  /**
+   * Skip the (normally 5s) diagnostics cache and re-probe the CLI right now.
+   * Needed so a manual "Refresh" can see a `claude auth login` that just
+   * happened without waiting out the cache or relaunching the app - the
+   * outer per-provider result cache (quota-state.ts) already has its own
+   * bypass flag, but that doesn't reach this module's own internal cache.
+   */
+  bypassCache?: boolean;
 }
 
 type ClaudeCommandResult = {
@@ -961,6 +969,7 @@ async function getCachedAnthropicLocalDiagnostics(
   };
 
   if (
+    !options.bypassCache &&
     cached.value &&
     cached.timestamp > 0 &&
     now - cached.timestamp < ANTHROPIC_DIAGNOSTICS_TTL_MS
@@ -969,6 +978,8 @@ async function getCachedAnthropicLocalDiagnostics(
   }
 
   if (cached.inFlight) {
+    // A probe already in flight is inherently fresh - join it instead of
+    // spawning a duplicate `claude` subprocess, even when bypassing cache.
     return cached.inFlight;
   }
 
@@ -1010,6 +1021,7 @@ export async function getAnthropicDiagnostics(
   };
 
   if (
+    !options.bypassCache &&
     cached.value &&
     cached.timestamp > 0 &&
     now - cached.timestamp < ANTHROPIC_DIAGNOSTICS_TTL_MS
@@ -1018,11 +1030,16 @@ export async function getAnthropicDiagnostics(
   }
 
   if (cached.inFlight) {
+    // A probe already in flight is inherently fresh - join it instead of
+    // spawning a duplicate `claude` subprocess, even when bypassing cache.
     return cached.inFlight;
   }
 
   const inFlight = (async () => {
-    const localDiagnostics = await getCachedAnthropicLocalDiagnostics({ binaryPath });
+    const localDiagnostics = await getCachedAnthropicLocalDiagnostics({
+      binaryPath,
+      bypassCache: options.bypassCache,
+    });
     if (localDiagnostics.authStatus !== "authenticated" || localDiagnostics.localQuota) {
       return mapLocalDiagnosticsToAnthropicDiagnostics(localDiagnostics);
     }
@@ -1099,8 +1116,11 @@ export async function hasAnthropicCredentialsConfigured(
   options: AnthropicProbeOptions = {},
 ): Promise<boolean> {
   try {
+    // Deliberately gate on "CLI installed" rather than "currently authenticated":
+    // an expired/missing session should surface as an actionable auth error from
+    // queryAnthropicQuota(), not make the provider disappear from menubar/dashboard.
     const diagnostics = await getCachedAnthropicLocalDiagnostics(options);
-    return diagnostics.installed && diagnostics.authStatus === "authenticated";
+    return diagnostics.installed;
   } catch {
     return false;
   }
@@ -1115,7 +1135,11 @@ export async function queryAnthropicQuota(
       return diagnostics.quota ?? null;
     }
 
-    if (diagnostics.authStatus === "authenticated" && diagnostics.message) {
+    // Surface any diagnostics message (including "not authenticated, run
+    // `claude auth login`") as a visible error rather than only when already
+    // authenticated - otherwise an expired session silently disappears
+    // instead of prompting the user to re-auth.
+    if (diagnostics.message) {
       return {
         success: false,
         error: diagnostics.message,
