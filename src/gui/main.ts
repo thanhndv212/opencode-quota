@@ -11,7 +11,6 @@
  */
 
 import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, dialog, shell } from "electron";
-import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
@@ -42,65 +41,53 @@ const DASHBOARD_PORT = 3939;
 const DASHBOARD_URL = `http://localhost:${DASHBOARD_PORT}`;
 
 // =============================================================================
-// Dashboard server management
+// Dashboard server (in-process)
 // =============================================================================
+//
+// Runs the same Express app the standalone `opencode-quota dashboard` CLI
+// uses, directly inside this process — not spawned as a child process.
+//
+// Why not just `import` DashboardApi with better-sqlite3 like the CLI does:
+// better-sqlite3 is a native module compiled against system Node's ABI, and
+// Electron's bundled V8/Node uses a different one. A real `npmRebuild: true`
+// packaging attempt confirmed better-sqlite3 12.10.0's C++ source doesn't
+// even compile against Electron 42's V8 headers. So this uses a read-only
+// sql.js (WASM SQLite, no native module) adapter instead — see
+// dashboard/sqljs-database.ts. The plugin process remains the sole writer,
+// via better-sqlite3 in its own real-Node process (dashboard-instance.ts);
+// this adapter re-reads the file whenever its mtime changes, so it reflects
+// the plugin's latest writes without two engines ever writing concurrently.
 
-let dashboardProcess: ReturnType<typeof spawn> | null = null;
+let dashboardServerStarted: Promise<void> | null = null;
 
-async function isDashboardRunning(): Promise<boolean> {
-  try {
-    const response = await fetch(`${DASHBOARD_URL}/api/dashboard/summary`, {
-      method: 'HEAD',
-      signal: AbortSignal.timeout(2000),
+function ensureDashboardServerStarted(): Promise<void> {
+  if (!dashboardServerStarted) {
+    dashboardServerStarted = (async () => {
+      const [{ getOpenCodeDbPath }, { SqlJsDatabaseAdapter }, { DashboardApi }, { startDashboardServer: startExpressServer }] =
+        await Promise.all([
+          import("../lib/opencode-storage.js"),
+          import("../dashboard/sqljs-database.js"),
+          import("../dashboard/api.js"),
+          import("../dashboard/server.js"),
+        ]);
+
+      const openCodeDbPath = getOpenCodeDbPath();
+      if (!openCodeDbPath) {
+        throw new Error("OpenCode data directory not found — is opencode installed?");
+      }
+      const dashboardDbPath = path.join(path.dirname(openCodeDbPath), "quota-dashboard.db");
+
+      const adapter = await SqlJsDatabaseAdapter.open(dashboardDbPath);
+      const dashboardApi = new DashboardApi(adapter as any);
+
+      await startExpressServer({ port: DASHBOARD_PORT, dashboardApi });
+      console.log(`Dashboard server started in-process at ${DASHBOARD_URL}`);
+    })().catch((err) => {
+      dashboardServerStarted = null; // allow retry on next open attempt
+      throw err;
     });
-    return response.ok;
-  } catch {
-    return false;
   }
-}
-
-function startDashboardServer(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (dashboardProcess) {
-      resolve(); // Already running
-      return;
-    }
-
-    const dashboardScript = path.join(getAppRoot(), "bin", "opencode-quota.js");
-    
-    if (!existsSync(dashboardScript)) {
-      reject(new Error(`Dashboard script not found: ${dashboardScript}`));
-      return;
-    }
-
-    console.log(`Starting dashboard server: node ${dashboardScript} dashboard --port ${DASHBOARD_PORT}`);
-    
-    dashboardProcess = spawn("node", [dashboardScript, "dashboard", "--port", String(DASHBOARD_PORT)], {
-      detached: false,
-      stdio: "ignore",
-    });
-
-    dashboardProcess.on("error", (err) => {
-      console.error("Failed to start dashboard server:", err);
-      dashboardProcess = null;
-      reject(err);
-    });
-
-    dashboardProcess.on("exit", (code) => {
-      console.log(`Dashboard server exited with code ${code}`);
-      dashboardProcess = null;
-    });
-
-    // Give the server a moment to start
-    setTimeout(() => resolve(), 2000);
-  });
-}
-
-function stopDashboardServer(): void {
-  if (dashboardProcess) {
-    dashboardProcess.kill();
-    dashboardProcess = null;
-  }
+  return dashboardServerStarted;
 }
 
 // =============================================================================
@@ -358,19 +345,16 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
 
   // ── Shell ──────────────────────────────────────────
   ipcMain.handle("shell:openExternal", async (_event, params: { url: string }) => {
-    // If opening dashboard URL, ensure server is running first
+    // If opening dashboard URL, ensure the in-process server has started first
     if (params.url.startsWith(DASHBOARD_URL)) {
-      const isRunning = await isDashboardRunning();
-      if (!isRunning) {
-        try {
-          await startDashboardServer();
-        } catch (err) {
-          dialog.showErrorBox(
-            "Dashboard Server Error",
-            `Failed to start dashboard server:\n${(err as Error).message}`
-          );
-          throw err;
-        }
+      try {
+        await ensureDashboardServerStarted();
+      } catch (err) {
+        dialog.showErrorBox(
+          "Dashboard Server Error",
+          `Failed to start dashboard server:\n${(err as Error).message}`
+        );
+        throw err;
       }
     }
     return shell.openExternal(params.url);
@@ -515,17 +499,14 @@ app.whenReady().then(async () => {
       {
         label: "Open Dashboard",
         click: async () => {
-          const isRunning = await isDashboardRunning();
-          if (!isRunning) {
-            try {
-              await startDashboardServer();
-            } catch (err) {
-              dialog.showErrorBox(
-                "Dashboard Server Error",
-                `Failed to start dashboard server:\n${(err as Error).message}`
-              );
-              return;
-            }
+          try {
+            await ensureDashboardServerStarted();
+          } catch (err) {
+            dialog.showErrorBox(
+              "Dashboard Server Error",
+              `Failed to start dashboard server:\n${(err as Error).message}`
+            );
+            return;
           }
           shell.openExternal(DASHBOARD_URL);
         },
@@ -585,9 +566,6 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
-  // Cleanup dashboard server
-  stopDashboardServer();
-  
   // Cleanup tray
   if (tray && !tray.isDestroyed()) {
     tray.destroy();

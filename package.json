@@ -84,6 +84,7 @@
     "@opencode-ai/plugin": "^1.4.3",
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
+    "@types/sql.js": "^1.4.11",
     "electron": "^42.5.0",
     "electron-builder": "^26.15.3",
     "husky": "^9.1.7",
@@ -99,6 +100,7 @@
     "comment-json": "^5.0.0",
     "express": "^4.18.2",
     "solid-js": "^1.9.12",
+    "sql.js": "^1.14.1",
     "xdg-basedir": "^5.1.0"
   },
   "optionalDependencies": {
