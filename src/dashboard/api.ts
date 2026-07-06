@@ -152,6 +152,38 @@ export class DashboardApi {
   }
 
   /**
+   * Set (replace) the usage row for a given day/provider/model, instead of
+   * incrementing like recordUsage(). Used by the history sync bridge, which
+   * recomputes each day's full totals from the source pricing pipeline
+   * every time rather than tracking incremental deltas — so writes must
+   * replace, not add.
+   */
+  setUsageForDate(provider: string, date: string, model: string, usage: UsageData): void {
+    this.db
+      .prepare(
+        `INSERT INTO usage_history
+         (provider, date, model, tokens_input, tokens_output, tokens_cache, cost_usd, request_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(provider, date, model) DO UPDATE SET
+           tokens_input = excluded.tokens_input,
+           tokens_output = excluded.tokens_output,
+           tokens_cache = excluded.tokens_cache,
+           cost_usd = excluded.cost_usd,
+           request_count = excluded.request_count`
+      )
+      .run(
+        provider,
+        date,
+        model,
+        usage.tokensInput,
+        usage.tokensOutput,
+        usage.tokensCache,
+        usage.costUsd,
+        usage.requestCount
+      );
+  }
+
+  /**
    * Get per-model breakdown
    */
   getModelBreakdown(provider: string, days: number = 7): ModelUsage[] {
@@ -226,6 +258,24 @@ export class DashboardApi {
         quotaData.limit,
         resetType
       );
+  }
+
+  /**
+   * List every provider that has ever recorded a quota snapshot or usage
+   * row — i.e. the real, current set of providers with data, rather than a
+   * hardcoded guess. Used to populate the dashboard UI's provider picker so
+   * it can't silently omit a provider the user actually has data for.
+   */
+  listProviders(): string[] {
+    const rows = this.db
+      .prepare(
+        `SELECT provider FROM quota_snapshots
+         UNION
+         SELECT provider FROM usage_history
+         ORDER BY provider`
+      )
+      .all();
+    return rows.map((row: any) => row.provider);
   }
 
   /**
