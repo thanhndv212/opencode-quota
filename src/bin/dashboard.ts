@@ -7,8 +7,11 @@
 
 import { startDashboardServer } from "../dashboard/server.js";
 import { DashboardApi } from "../dashboard/api.js";
+import { backfillUsageHistory } from "../dashboard/usage-history-bridge.js";
 import { getOpenCodeDbPath } from "../lib/opencode-storage.js";
 import { join, dirname } from "path";
+
+const USAGE_HISTORY_BACKFILL_DAYS = 7;
 
 async function main() {
   const args = process.argv.slice(2);
@@ -30,6 +33,14 @@ async function main() {
     const Database = (await import("better-sqlite3")).default;
     const db = new Database(dashboardDbPath) as any; // Cast to any to avoid type mismatch
     const dashboardApi = new DashboardApi(db);
+
+    try {
+      console.log(`📈 Backfilling usage history (last ${USAGE_HISTORY_BACKFILL_DAYS} days)...`);
+      await backfillUsageHistory(dashboardApi, USAGE_HISTORY_BACKFILL_DAYS);
+      console.log("✓ Usage history up to date");
+    } catch (err) {
+      console.error("Usage history backfill failed (dashboard will still work with older data):", err);
+    }
 
     const server = await startDashboardServer({
       port,
