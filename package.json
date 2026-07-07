@@ -86,7 +86,7 @@
     "@types/node": "^22.0.0",
     "@types/sql.js": "^1.4.11",
     "electron": "^42.5.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "26.13.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
     "prettier": "^3.8.0",
