@@ -80,23 +80,18 @@ describe("google antigravity multi-account refresh", () => {
     const fetchSpy = vi.fn();
 
     // First refresh token endpoint call, then quota endpoint call.
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
-    });
+    fetchSpy.mockResolvedValueOnce(Response.json({ access_token: "new_token", expires_in: 3600 }));
 
     // Second call: quota API
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          models: {
-            "claude-opus-4-5-thinking": {
-              quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
-            },
+    fetchSpy.mockResolvedValueOnce(
+      Response.json({
+        models: {
+          "claude-opus-4-5-thinking": {
+            quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
           },
-        }),
-    });
+        },
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchSpy as any);
 
@@ -136,24 +131,19 @@ describe("google antigravity multi-account refresh", () => {
     );
 
     const fetchSpy = vi.fn();
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
-    });
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          models: {
-            "claude-opus-4-6-thinking": {
-              quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
-            },
-            "gemini-3-flash": {
-              quotaInfo: { remainingFraction: 0.5, resetTime: "2026-01-01T01:30:00Z" },
-            },
+    fetchSpy.mockResolvedValueOnce(Response.json({ access_token: "new_token", expires_in: 3600 }));
+    fetchSpy.mockResolvedValueOnce(
+      Response.json({
+        models: {
+          "claude-opus-4-6-thinking": {
+            quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
           },
-        }),
-    });
+          "gemini-3-flash": {
+            quotaInfo: { remainingFraction: 0.5, resetTime: "2026-01-01T01:30:00Z" },
+          },
+        },
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchSpy as any);
 
@@ -202,14 +192,8 @@ describe("google antigravity multi-account refresh", () => {
     );
 
     const fetchSpy = vi.fn();
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
-    });
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ models: {} }),
-    });
+    fetchSpy.mockResolvedValueOnce(Response.json({ access_token: "new_token", expires_in: 3600 }));
+    fetchSpy.mockResolvedValueOnce(Response.json({ models: {} }));
 
     vi.stubGlobal("fetch", fetchSpy as any);
 
@@ -252,21 +236,16 @@ describe("google antigravity multi-account refresh", () => {
     );
 
     const fetchSpy = vi.fn();
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
-    });
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          models: {
-            "gpt-oss-120b-medium": {
-              quotaInfo: { remainingFraction: 0.5, resetTime: "2026-01-01T01:30:00Z" },
-            },
+    fetchSpy.mockResolvedValueOnce(Response.json({ access_token: "new_token", expires_in: 3600 }));
+    fetchSpy.mockResolvedValueOnce(
+      Response.json({
+        models: {
+          "gpt-oss-120b-medium": {
+            quotaInfo: { remainingFraction: 0.5, resetTime: "2026-01-01T01:30:00Z" },
           },
-        }),
-    });
+        },
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchSpy as any);
 
@@ -342,21 +321,16 @@ describe("google antigravity multi-account refresh", () => {
     );
 
     const fetchSpy = vi.fn();
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () => Promise.resolve({ access_token: "new_token", expires_in: 3600 }),
-    });
-    fetchSpy.mockResolvedValueOnce({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          models: {
-            "claude-opus-4-5-thinking": {
-              quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
-            },
+    fetchSpy.mockResolvedValueOnce(Response.json({ access_token: "new_token", expires_in: 3600 }));
+    fetchSpy.mockResolvedValueOnce(
+      Response.json({
+        models: {
+          "claude-opus-4-5-thinking": {
+            quotaInfo: { remainingFraction: 0.75, resetTime: "2026-01-01T01:00:00Z" },
           },
-        }),
-    });
+        },
+      }),
+    );
 
     vi.stubGlobal("fetch", fetchSpy as any);
 
@@ -364,7 +338,9 @@ describe("google antigravity multi-account refresh", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     const secondCall = fetchSpy.mock.calls[1];
-    expect(secondCall[0]).toBe("https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+    expect(secondCall[0]).toBe(
+      "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+    );
     const bodyObj = JSON.parse(secondCall[1].body);
     expect(bodyObj.project).toBe("managed-proj");
   });
