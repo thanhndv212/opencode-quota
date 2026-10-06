@@ -4,12 +4,12 @@ Prepared: 2026-10-06. Status: execution started. See the live delivery tracker b
 
 ## Live delivery tracker
 
-Updated: 2026-10-06. Parent issue: [Upstream adoption delivery](https://github.com/thanhndv212/opencode-quota/issues/3). Execution branch: `delivery/m0-foundation`.
+Updated: 2026-10-06. Parent issue: [Upstream adoption delivery](https://github.com/thanhndv212/opencode-quota/issues/3). Foundation merged in [PR #30](https://github.com/thanhndv212/opencode-quota/pull/30); correctness work continues in `fix/cor-04-session-copy-accounting`.
 
 | Milestone | Status      | Completion gate                                                                          |
 | --------- | ----------- | ---------------------------------------------------------------------------------------- |
 | M0        | In progress | Tracking/protection, green Linux CI, installed package/GUI smoke, fork release candidate |
-| M1        | Planned     | Correctness backports and identity/usage/recovery evidence                               |
+| M1        | In progress | Correctness backports and identity/usage/recovery evidence                               |
 | M2        | Planned     | Standalone config, scheduling, history and budget evaluation                             |
 | M3        | Planned     | Accounting parity and database/export compatibility                                      |
 | M4        | Planned     | Verified reset notices and eligible exhaustion estimates                                 |
@@ -21,14 +21,14 @@ Updated: 2026-10-06. Parent issue: [Upstream adoption delivery](https://github.c
 
 | Item   | GitHub issue                                                   | Status      | Evidence / remaining work                                                                                             |
 | ------ | -------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------- |
-| FND-01 | [#4](https://github.com/thanhndv212/opencode-quota/issues/4)   | In progress | Issues/milestones enabled; protection and automation verification pending                                             |
-| FND-02 | [#5](https://github.com/thanhndv212/opencode-quota/issues/5)   | In progress | Linux baseline reproduced: 2 native-binding failures; build permission fix awaits fresh CI                            |
-| FND-03 | [#6](https://github.com/thanhndv212/opencode-quota/issues/6)   | In progress | Local installed tarball and macOS Electron smoke pass; Linux CI pending                                               |
+| FND-01 | [#4](https://github.com/thanhndv212/opencode-quota/issues/4)   | In progress | Tracking/protection verified; PR #30 merged; automation re-enabled                                                    |
+| FND-02 | [#5](https://github.com/thanhndv212/opencode-quota/issues/5)   | In progress | PR #30 Linux quality and required-gate passed; post-merge main CI pending                                             |
+| FND-03 | [#6](https://github.com/thanhndv212/opencode-quota/issues/6)   | In progress | PR #30 installed tarball Node 20/22 and Electron Linux/macOS checks passed                                            |
 | FND-04 | [#7](https://github.com/thanhndv212/opencode-quota/issues/7)   | In progress | Fork name and immutable artifact workflows implemented; npm publisher registration and candidate verification pending |
 | COR-01 | [#8](https://github.com/thanhndv212/opencode-quota/issues/8)   | Planned     | Controllable-server regression                                                                                        |
 | COR-02 | [#9](https://github.com/thanhndv212/opencode-quota/issues/9)   | Planned     | Cross-account/process tests                                                                                           |
 | COR-03 | [#10](https://github.com/thanhndv212/opencode-quota/issues/10) | Planned     | Error/recovery and cooldown tests                                                                                     |
-| COR-04 | [#11](https://github.com/thanhndv212/opencode-quota/issues/11) | Planned     | Fork/source/sync total fixtures                                                                                       |
+| COR-04 | [#11](https://github.com/thanhndv212/opencode-quota/issues/11) | In progress | Copy/multiplicity/source/sync regression fixtures pass; PR and CI pending                                             |
 | COR-05 | [#12](https://github.com/thanhndv212/opencode-quota/issues/12) | Planned     | Legacy/current payload contracts                                                                                      |
 | GUI-01 | [#13](https://github.com/thanhndv212/opencode-quota/issues/13) | Planned     | Config parity scenarios                                                                                               |
 | GUI-02 | [#14](https://github.com/thanhndv212/opencode-quota/issues/14) | Planned     | Clock + packaged app evidence                                                                                         |

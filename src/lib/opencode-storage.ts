@@ -154,7 +154,10 @@ function mapRowToOpenCodeMessage(row: MessageRow): OpenCodeMessage | null {
   };
 }
 
-function openDbOrNull(): { dbPath: string; open: () => ReturnType<typeof openOpenCodeSqliteReadOnly> } | null {
+function openDbOrNull(): {
+  dbPath: string;
+  open: () => ReturnType<typeof openOpenCodeSqliteReadOnly>;
+} | null {
   const dbPath = getOpenCodeDbPath();
   if (!dbPath) return null;
   if (!existsSync(dbPath)) return null;
@@ -235,7 +238,9 @@ function buildMessageQuery(params: {
   return { sql, args };
 }
 
-async function hasJsonExtract(conn: { get<T = unknown>(sql: string, params?: unknown[]): T | null }): Promise<boolean> {
+async function hasJsonExtract(conn: {
+  get<T = unknown>(sql: string, params?: unknown[]): T | null;
+}): Promise<boolean> {
   try {
     const row = conn.get<{ r: string }>(
       "SELECT json_extract('{\"role\":\"assistant\"}', '$.role') as r",
@@ -262,6 +267,48 @@ function compareMessageOrder(a: OpenCodeMessage, b: OpenCodeMessage): number {
   const bCreated = typeof b.time?.created === "number" ? b.time.created : Number.MAX_SAFE_INTEGER;
   if (aCreated !== bCreated) return aCreated - bCreated;
   return a.id.localeCompare(b.id);
+}
+
+/** Collapse completed history copied across sessions, preserving repeats within each session.
+ * The storage format has no copy provenance: equal timestamps and usage form the copy identity.
+ * Incomplete observations are retained rather than guessed to be copies.
+ */
+function deduplicateSessionCopies(messages: OpenCodeMessage[]): OpenCodeMessage[] {
+  const counts = new Map<string, Map<string, number>>();
+  const maxima = new Map<string, number>();
+  return messages.filter((message) => {
+    if (
+      !message.providerID ||
+      !message.modelID ||
+      !Number.isFinite(message.time?.created) ||
+      !Number.isFinite(message.time?.completed) ||
+      !message.tokens
+    )
+      return true;
+    const fingerprint = JSON.stringify([
+      message.time?.created,
+      message.time?.completed,
+      message.providerID,
+      message.modelID,
+      message.tokens.input,
+      message.tokens.output,
+      message.tokens.reasoning,
+      message.tokens.cache?.read,
+      message.tokens.cache?.write,
+      message.cost,
+    ]);
+    let sessions = counts.get(fingerprint);
+    if (!sessions) {
+      sessions = new Map();
+      counts.set(fingerprint, sessions);
+    }
+    const count = (sessions.get(message.sessionID) ?? 0) + 1;
+    sessions.set(message.sessionID, count);
+    const maximum = maxima.get(fingerprint) ?? 0;
+    if (count <= maximum) return false;
+    maxima.set(fingerprint, count);
+    return true;
+  });
 }
 
 export async function getOpenCodeDbStats(): Promise<OpenCodeDbStats> {
@@ -316,7 +363,7 @@ export async function iterAssistantMessages(params: {
   try {
     const q = buildMessageQuery({ sinceMs: params.sinceMs, untilMs: params.untilMs });
     const rows = conn.all<MessageRow>(q.sql, q.args);
-    return mapAssistantMessages(rows);
+    return deduplicateSessionCopies(mapAssistantMessages(rows));
   } finally {
     conn.close();
   }
@@ -389,7 +436,7 @@ export async function iterAssistantMessagesForSessions(params: {
     }
 
     messages.sort(compareMessageOrder);
-    return messages;
+    return deduplicateSessionCopies(messages);
   } finally {
     conn.close();
   }
