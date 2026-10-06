@@ -7,6 +7,7 @@ import type { QuotaProviderContext, QuotaToastEntry, QuotaToastError } from "../
 import { fetchQuotaProviderResult } from "../../lib/quota-state.js";
 import { getProviders } from "../../providers/registry.js";
 import type { QuotaToastConfig } from "../../lib/types.js";
+import { getQuotaProviderDisplayLabel } from "../../lib/provider-metadata.js";
 import { DEFAULT_CONFIG } from "../../lib/types.js";
 
 export interface QuotaFetchResult {
@@ -80,8 +81,14 @@ export async function fetchAllQuota(
     }),
   );
 
-  for (const settled of results) {
-    if (settled.status === "rejected") continue;
+  for (const [index, settled] of results.entries()) {
+    if (settled.status === "rejected") {
+      errors.push({
+        label: getQuotaProviderDisplayLabel(enabledList[index]!.id),
+        message: "Quota query failed",
+      });
+      continue;
+    }
     const item = settled.value;
     if (!item) continue;
 
