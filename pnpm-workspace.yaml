@@ -1,6 +1,6 @@
 packages: []
-# pnpm 10.0.0 uses onlyBuiltDependencies; allowBuilds is understood by newer
-# pnpm releases. Keep both lists aligned while this CLI remains pinned.
+# pnpm 10.0.0 reads package.json's pnpm.onlyBuiltDependencies; later
+# releases read workspace settings. Keep these lists aligned.
 onlyBuiltDependencies:
   - better-sqlite3
   - electron

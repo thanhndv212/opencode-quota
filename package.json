@@ -2,6 +2,15 @@
   "name": "@thanhndv212/opencode-quota",
   "version": "3.10.1",
   "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "msgpackr-extract"
+    ]
+  },
   "description": "OpenCode quota & tokens usage with zero context window pollution. Supports GitHub Copilot, OpenAI (Plus/Pro), Qwen Code, Chutes AI, Synthetic, Google Antigravity, Z.ai coding plan and more.",
   "type": "module",
   "main": "./dist/index.js",
