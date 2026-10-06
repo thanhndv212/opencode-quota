@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("solid-js", () => ({
-  createSignal: <T,>(value: T) => [() => value, vi.fn()],
+  createSignal: <T>(value: T) => [() => value, vi.fn()],
   onCleanup: vi.fn(),
 }));
 
@@ -43,7 +43,7 @@ describe("tui dist packaging", () => {
     const mod = await import("../dist/tui.tsx");
 
     expect(mod.default).toMatchObject({
-      id: "@slkiser/opencode-quota",
+      id: "@thanhndv212/opencode-quota",
     });
     expect(typeof mod.default.tui).toBe("function");
   });

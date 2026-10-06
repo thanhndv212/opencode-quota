@@ -6,7 +6,7 @@ corepack prepare pnpm@10.0.0 --activate
 pnpm install
 ```
 
-`pnpm install` runs `prepare`, which installs Husky hooks. pnpm CLI requires Node.js >=22; the runtime package itself needs Node.js >=20.
+`pnpm install` runs `prepare`, which installs Husky hooks. Use Node.js 22 for development/CI and pinned pnpm 10.0.0; the runtime package itself needs Node.js >=20.
 
 ## Build, Typecheck, Test
 
@@ -16,7 +16,8 @@ pnpm test                 # vitest run
 pnpm run test:watch       # vitest (watch)
 pnpm run build            # clean-dist → tsc → copy-data → prepare-tui-dist
 pnpm run build:gui        # copies renderer HTML/CSS/JS into dist/gui/renderer/
-pnpm run build:check      # build + pnpm pack --dry-run (CI-like)
+pnpm run build:check      # clean build + real tarball consumer smoke
+pnpm run smoke:gui        # actual Electron startup from an installed tarball
 ```
 
 Build order matters — `copy-data` and `prepare-tui-dist` depend on `tsc` output.
@@ -33,15 +34,16 @@ Prettier only — no ESLint. Configuration: `semi: true`, `singleQuote: false`, 
 
 Three export paths from the same package:
 
-| Export | Entry | Config location | Purpose |
-|--------|-------|----------------|---------|
-| `.` / `./server` | `src/index.ts` → `src/plugin.ts` | `opencode.json` | Server plugin: slash commands, `tool.quota_status`, popup toasts |
-| `./tui` | `src/tui.tsx` | `tui.json` | TUI plugin: sidebar panel, compact status line, local dialogs, home bottom |
-| `./gui` | `src/gui/main.ts` | N/A | Standalone Electron desktop app |
+| Export           | Entry                            | Config location | Purpose                                                                    |
+| ---------------- | -------------------------------- | --------------- | -------------------------------------------------------------------------- |
+| `.` / `./server` | `src/index.ts` → `src/plugin.ts` | `opencode.json` | Server plugin: slash commands, `tool.quota_status`, popup toasts           |
+| `./tui`          | `src/tui.tsx`                    | `tui.json`      | TUI plugin: sidebar panel, compact status line, local dialogs, home bottom |
+| `./gui`          | `src/gui/main.ts`                | N/A             | Standalone Electron desktop app                                            |
 
 Both server and TUI plugins must be listed in their respective config files for full functionality. The TUI plugin renders with `@opentui/solid` (SolidJS JSX).
 
 Key directories:
+
 - `src/plugin.ts` — server plugin entry (hooks, toasts, slash command routing)
 - `src/tui.tsx` — TUI plugin entry (sidebar, compact line, dialogs)
 - `src/providers/` — one file per quota provider (22 providers), plus `registry.ts`
@@ -87,6 +89,7 @@ Model pricing snapshots come from `src/lib/modelsdev-pricing.ts`. Refresh with `
 Runs with `vitest` (Node environment). Test setup at `tests/setup.ts` resets pricing snapshot, timers, env stubs, and mocks after each test. Test file pattern: `tests/**/*.test.ts`.
 
 Key boundary tests to keep passing:
+
 - `tests/plugin.command-handled-boundary.test.ts`
 - `tests/tui-smoke.test.ts`
 - `tests/command-handled.test.ts`
@@ -96,7 +99,7 @@ Key boundary tests to keep passing:
 ## Useful Commands
 
 ```bash
-npx @slkiser/opencode-quota init      # Interactive installer
+npx @thanhndv212/opencode-quota init      # Interactive installer
 opencode-quota show                    # Terminal quota summary
 opencode-quota show --json             # Machine-readable output
 opencode-quota show --json --threshold 5  # CI gate (exit 1 if <5%)

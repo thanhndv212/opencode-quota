@@ -17,7 +17,12 @@ import { existsSync, readFileSync } from "fs";
 
 import type { QuotaToastConfig } from "../lib/types.js";
 import { DEFAULT_CONFIG } from "../lib/types.js";
-import { getGuiConfig, updateGuiConfig, updateWindowBounds, type GuiConfig } from "../lib/gui-config.js";
+import {
+  getGuiConfig,
+  updateGuiConfig,
+  updateWindowBounds,
+  type GuiConfig,
+} from "../lib/gui-config.js";
 import { preloadUserPricing } from "../lib/user-pricing.js";
 import { preloadBudgetAlerts } from "../lib/budget-alerts.js";
 import { fixGuiProcessPath } from "../lib/fix-gui-path.js";
@@ -72,7 +77,7 @@ function resolveRendererPath(): string {
   const distPath = path.join(__dirname, RENDERER_HTML);
   if (existsSync(distPath)) return distPath;
 
-  const srcPath = path.join(__dirname, "..", "src", "gui", RENDERER_HTML);
+  const srcPath = path.join(__dirname, "..", "..", "src", "gui", RENDERER_HTML);
   if (existsSync(srcPath)) return srcPath;
 
   return "";
@@ -80,7 +85,7 @@ function resolveRendererPath(): string {
 
 function resolvePreloadPath(): string {
   // In packaged mode, preload is inside the asar
-  const preloadPath = path.join(__dirname, "preload.js");
+  const preloadPath = path.join(__dirname, "preload.mjs");
   if (existsSync(preloadPath)) return preloadPath;
 
   // Fallback for development
@@ -91,7 +96,7 @@ function resolvePackageJsonPath(): string {
   if (app.isPackaged) {
     return path.join(app.getAppPath(), "package.json");
   }
-  return path.join(getAppRoot(), "package.json");
+  return path.join(getAppRoot(), "..", "package.json");
 }
 
 // =============================================================================
@@ -117,12 +122,12 @@ function createTrayIcon(): Electron.NativeImage {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist <= r) {
-        canvas[idx] = 100;     // R
+        canvas[idx] = 100; // R
         canvas[idx + 1] = 200; // G
         canvas[idx + 2] = 255; // B
         canvas[idx + 3] = 255; // A
       } else {
-        canvas[idx + 3] = 0;   // transparent
+        canvas[idx + 3] = 0; // transparent
       }
     }
   }
@@ -197,19 +202,25 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
     return pricingIpc.listPricing();
   });
 
-  ipcMain.handle("pricing:save", async (_event, params: {
-    provider: string;
-    model: string;
-    rates: Record<string, number | undefined>;
-    label?: string;
-  }) => {
-    return pricingIpc.savePricingOverride({
-      provider: params.provider,
-      model: params.model,
-      rates: params.rates,
-      label: params.label,
-    });
-  });
+  ipcMain.handle(
+    "pricing:save",
+    async (
+      _event,
+      params: {
+        provider: string;
+        model: string;
+        rates: Record<string, number | undefined>;
+        label?: string;
+      },
+    ) => {
+      return pricingIpc.savePricingOverride({
+        provider: params.provider,
+        model: params.model,
+        rates: params.rates,
+        label: params.label,
+      });
+    },
+  );
 
   ipcMain.handle("pricing:delete", async (_event, params: { provider: string; model: string }) => {
     return pricingIpc.deletePricingOverride(params.provider, params.model);
@@ -235,7 +246,11 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
   ipcMain.handle("alerts:create", async (_event, params: Record<string, unknown>) => {
     return alertsIpc.createAlert({
       name: params.name as string,
-      scope: params.scope as { type: "global" | "provider" | "model"; providerId?: string; modelId?: string },
+      scope: params.scope as {
+        type: "global" | "provider" | "model";
+        providerId?: string;
+        modelId?: string;
+      },
       window: params.window as "day" | "week" | "month" | "all",
       metric: params.metric as "cost_usd" | "tokens_total" | "tokens_input" | "tokens_output",
       threshold: params.threshold as number,
@@ -244,36 +259,71 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
     });
   });
 
-  ipcMain.handle("alerts:update", async (_event, params: { id: string; params: Record<string, unknown> }) => {
-    return alertsIpc.updateAlert(params.id, params.params);
-  });
+  ipcMain.handle(
+    "alerts:update",
+    async (_event, params: { id: string; params: Record<string, unknown> }) => {
+      return alertsIpc.updateAlert(params.id, params.params);
+    },
+  );
 
   ipcMain.handle("alerts:delete", async (_event, params: { id: string }) => {
     return alertsIpc.deleteAlert(params.id);
   });
 
-  ipcMain.handle("alerts:eval", async (_event, params: { usageMap: Array<{ key: string; usage: unknown }> }) => {
-    return alertsIpc.evaluateAlerts(params.usageMap as Array<{ key: string; usage: Parameters<typeof alertsIpc.evaluateAlerts>[0][number]["usage"] }>);
-  });
+  ipcMain.handle(
+    "alerts:eval",
+    async (_event, params: { usageMap: Array<{ key: string; usage: unknown }> }) => {
+      return alertsIpc.evaluateAlerts(
+        params.usageMap as Array<{
+          key: string;
+          usage: Parameters<typeof alertsIpc.evaluateAlerts>[0][number]["usage"];
+        }>,
+      );
+    },
+  );
 
   // ── API Keys ───────────────────────────────────────
   ipcMain.handle("apikeys:status", async () => apikeysIpc.getStatus());
-  ipcMain.handle("apikeys:init", async (_e, p: { passphrase: string }) => apikeysIpc.initStore(p.passphrase));
-  ipcMain.handle("apikeys:unlock", async (_e, p: { passphrase: string }) => apikeysIpc.unlockStore(p.passphrase));
-  ipcMain.handle("apikeys:lock", () => { apikeysIpc.lockStore(); });
+  ipcMain.handle("apikeys:init", async (_e, p: { passphrase: string }) =>
+    apikeysIpc.initStore(p.passphrase),
+  );
+  ipcMain.handle("apikeys:unlock", async (_e, p: { passphrase: string }) =>
+    apikeysIpc.unlockStore(p.passphrase),
+  );
+  ipcMain.handle("apikeys:lock", () => {
+    apikeysIpc.lockStore();
+  });
   ipcMain.handle("apikeys:isUnlocked", () => apikeysIpc.isUnlocked());
   ipcMain.handle("apikeys:list", () => apikeysIpc.listKeys());
   ipcMain.handle("apikeys:get", (_e, p: { providerId: string }) => apikeysIpc.getKey(p.providerId));
-  ipcMain.handle("apikeys:getMasked", (_e, p: { providerId: string }) => apikeysIpc.getMasked(p.providerId));
-  ipcMain.handle("apikeys:save", async (_e, p: { providerId: string; apiKey: string; label?: string }) => apikeysIpc.saveKey(p.providerId, p.apiKey, p.label));
-  ipcMain.handle("apikeys:delete", async (_e, p: { providerId: string }) => apikeysIpc.removeKey(p.providerId));
-  ipcMain.handle("apikeys:changePassphrase", async (_e, p: { oldPassphrase: string; newPassphrase: string }) => apikeysIpc.changePassphrase(p.oldPassphrase, p.newPassphrase));
-  ipcMain.handle("apikeys:export", async (_e, p: { sharePassphrase: string }) => apikeysIpc.exportKeys(p.sharePassphrase));
-  ipcMain.handle("apikeys:import", async (_e, p: { filePath: string; sharePassphrase: string }) => apikeysIpc.importKeys(p.filePath, p.sharePassphrase));
+  ipcMain.handle("apikeys:getMasked", (_e, p: { providerId: string }) =>
+    apikeysIpc.getMasked(p.providerId),
+  );
+  ipcMain.handle(
+    "apikeys:save",
+    async (_e, p: { providerId: string; apiKey: string; label?: string }) =>
+      apikeysIpc.saveKey(p.providerId, p.apiKey, p.label),
+  );
+  ipcMain.handle("apikeys:delete", async (_e, p: { providerId: string }) =>
+    apikeysIpc.removeKey(p.providerId),
+  );
+  ipcMain.handle(
+    "apikeys:changePassphrase",
+    async (_e, p: { oldPassphrase: string; newPassphrase: string }) =>
+      apikeysIpc.changePassphrase(p.oldPassphrase, p.newPassphrase),
+  );
+  ipcMain.handle("apikeys:export", async (_e, p: { sharePassphrase: string }) =>
+    apikeysIpc.exportKeys(p.sharePassphrase),
+  );
+  ipcMain.handle("apikeys:import", async (_e, p: { filePath: string; sharePassphrase: string }) =>
+    apikeysIpc.importKeys(p.filePath, p.sharePassphrase),
+  );
 
   // ── Config ─────────────────────────────────────────
   ipcMain.handle("config:get", async () => getGuiConfig());
-  ipcMain.handle("config:update", async (_e, p: { patch: Record<string, unknown> }) => updateGuiConfig(p.patch as Partial<GuiConfig>));
+  ipcMain.handle("config:update", async (_e, p: { patch: Record<string, unknown> }) =>
+    updateGuiConfig(p.patch as Partial<GuiConfig>),
+  );
   ipcMain.handle("config:reset", async () => {
     const { resetGuiConfig } = await import("../lib/gui-config.js");
     return resetGuiConfig();
@@ -303,17 +353,26 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
     return dashboardHistoryIpc.listProviders();
   });
 
-  ipcMain.handle("dashboardHistory:quotaHistory", async (_event, params: { provider: string; days?: number }) => {
-    return dashboardHistoryIpc.getQuotaHistory(params);
-  });
+  ipcMain.handle(
+    "dashboardHistory:quotaHistory",
+    async (_event, params: { provider: string; days?: number }) => {
+      return dashboardHistoryIpc.getQuotaHistory(params);
+    },
+  );
 
-  ipcMain.handle("dashboardHistory:modelBreakdown", async (_event, params: { provider: string; days?: number }) => {
-    return dashboardHistoryIpc.getModelBreakdown(params);
-  });
+  ipcMain.handle(
+    "dashboardHistory:modelBreakdown",
+    async (_event, params: { provider: string; days?: number }) => {
+      return dashboardHistoryIpc.getModelBreakdown(params);
+    },
+  );
 
-  ipcMain.handle("dashboardHistory:weeklyResets", async (_event, params: { provider: string; weeks?: number }) => {
-    return dashboardHistoryIpc.getWeeklyResets(params);
-  });
+  ipcMain.handle(
+    "dashboardHistory:weeklyResets",
+    async (_event, params: { provider: string; weeks?: number }) => {
+      return dashboardHistoryIpc.getWeeklyResets(params);
+    },
+  );
 }
 
 // =============================================================================
@@ -349,7 +408,9 @@ function createWindow(guiConfig: GuiConfig): BrowserWindow {
   if (htmlPath && existsSync(htmlPath)) {
     win.loadFile(htmlPath);
   } else {
-    win.loadURL(`data:text/html,<h1>${APP_NAME}</h1><p>Renderer not found at: ${htmlPath || '(no path)'}</p>`);
+    win.loadURL(
+      `data:text/html,<h1>${APP_NAME}</h1><p>Renderer not found at: ${htmlPath || "(no path)"}</p>`,
+    );
   }
 
   win.on("blur", () => {
@@ -410,89 +471,95 @@ function toggleWindow() {
 // App lifecycle
 // =============================================================================
 
-app.whenReady().then(async () => {
-  // Fix PATH first: launched via Finder/Dock/Spotlight, this process only
-  // has macOS's bare default PATH, so CLI-based providers (Claude Code CLI
-  // installed via Homebrew on Apple Silicon, etc.) would otherwise silently
-  // look "not installed" for every check this process ever makes.
-  await fixGuiProcessPath();
+app
+  .whenReady()
+  .then(async () => {
+    // Fix PATH first: launched via Finder/Dock/Spotlight, this process only
+    // has macOS's bare default PATH, so CLI-based providers (Claude Code CLI
+    // installed via Homebrew on Apple Silicon, etc.) would otherwise silently
+    // look "not installed" for every check this process ever makes.
+    await fixGuiProcessPath();
 
-  // Load configuration
-  const guiConfig = await getGuiConfig();
-  const quotaConfig = await loadQuotaConfig();
+    // Load configuration
+    const guiConfig = await getGuiConfig();
+    const quotaConfig = await loadQuotaConfig();
 
-  // Preload caches
-  await preloadUserPricing();
-  await preloadBudgetAlerts();
+    // Preload caches
+    await preloadUserPricing();
+    await preloadBudgetAlerts();
 
-  // Register IPC handlers
-  registerIpcHandlers(quotaConfig, guiConfig);
+    // Register IPC handlers
+    registerIpcHandlers(quotaConfig, guiConfig);
 
-  // Create tray icon (with fallback when system tray is unsupported)
-  const icon = createTrayIcon();
-  try {
-    tray = new Tray(icon);
-    tray.setToolTip(APP_NAME);
+    // Create tray icon (with fallback when system tray is unsupported)
+    const icon = createTrayIcon();
+    try {
+      tray = new Tray(icon);
+      tray.setToolTip(APP_NAME);
 
-    // Create tray context menu
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: "Show Window",
-        click: () => {
-          toggleCooldownUntil = Date.now() + 300;
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            if (!mainWindow.isVisible()) {
-              mainWindow.show();
+      // Create tray context menu
+      const contextMenu = Menu.buildFromTemplate([
+        {
+          label: "Show Window",
+          click: () => {
+            toggleCooldownUntil = Date.now() + 300;
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              if (!mainWindow.isVisible()) {
+                mainWindow.show();
+              }
+              mainWindow.focus();
             }
-            mainWindow.focus();
-          }
+          },
         },
-      },
-      { type: "separator" },
-      {
-        label: "Refresh Quota",
-        click: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("app:refresh");
-          }
+        { type: "separator" },
+        {
+          label: "Refresh Quota",
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send("app:refresh");
+            }
+          },
         },
-      },
-      { type: "separator" },
-      {
-        label: "Quit",
-        click: () => {
-          app.quit();
+        { type: "separator" },
+        {
+          label: "Quit",
+          click: () => {
+            app.quit();
+          },
         },
-      },
-    ]);
-    tray.setContextMenu(contextMenu);
+      ]);
+      tray.setContextMenu(contextMenu);
 
-    // Toggle window on tray click
-    tray.on("click", () => {
-      toggleWindow();
-    });
-  } catch (err) {
-    console.warn("System tray not available — running in window-only mode:", (err as Error).message);
-    tray = null;
-  }
-
-  // Create the popup window
-  mainWindow = createWindow(guiConfig);
-
-  // Prevent window from being closed — hide instead
-  mainWindow.on("close", (event: Electron.Event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.hide();
-      event.preventDefault();
+      // Toggle window on tray click
+      tray.on("click", () => {
+        toggleWindow();
+      });
+    } catch (err) {
+      console.warn(
+        "System tray not available — running in window-only mode:",
+        (err as Error).message,
+      );
+      tray = null;
     }
-  });
 
-  // Show initially
-  mainWindow.show();
-}).catch((err: unknown) => {
-  console.error("OpenCode Quota GUI failed to start:", err);
-  app.quit();
-});
+    // Create the popup window
+    mainWindow = createWindow(guiConfig);
+
+    // Prevent window from being closed — hide instead
+    mainWindow.on("close", (event: Electron.Event) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.hide();
+        event.preventDefault();
+      }
+    });
+
+    // Show initially
+    mainWindow.show();
+  })
+  .catch((err: unknown) => {
+    console.error("OpenCode Quota GUI failed to start:", err);
+    app.quit();
+  });
 
 // Prevent app from quitting when all windows are hidden
 app.on("window-all-closed", () => {

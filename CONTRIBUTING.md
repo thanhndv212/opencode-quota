@@ -23,7 +23,7 @@ Thanks for contributing. This repo has strict local-only behavior and regression
 ## Development Setup
 
 - The published package runtime supports Node.js `>=20.0.0` (matches `package.json` engines).
-- Repository development uses pnpm v10, which requires Node.js `>=18.12` for the pnpm CLI.
+- Repository development and CI use Node.js 22 with pinned pnpm 10.0.0.
 - Enable the pinned package manager and install dependencies with:
 
 ```sh
@@ -54,7 +54,7 @@ pnpm test
 pnpm run build
 ```
 
-Use `pnpm run test:watch` for local iteration. Use `pnpm run build:check` when you need the build plus package dry-run check.
+Use `pnpm run test:watch` for local iteration. `pnpm run build:check` builds and installs a real tarball in a temporary consumer, then verifies package exports, GUI assets and CLI startup. `pnpm run smoke:gui` launches that installed package through Electron with fixture IPC and isolated user state. On Linux, run it under `xvfb-run -a` if no display is available. Consumer installation skips native install scripts; this smoke verifies exports/assets and is separate from backend database tests.
 
 ## CI Checks (Automated)
 
@@ -63,9 +63,13 @@ PR and `main` pushes trigger `.github/workflows/ci.yml` (`CI` workflow):
 - Job: `pnpm-quality` on Node `22.x`
 - Steps: `pnpm install --frozen-lockfile`, `pnpm run typecheck`, `pnpm run build`, `pnpm test`, then `pnpm pack --pack-destination` to upload the package tarball artifact
 - Job: `runtime-smoke` on Node `20.x` and `22.x`
-- Runtime smoke installs the packed package as a consumer with npm and verifies the default import, `./server` import, `./tui` export resolution with the packaged `dist/tui.tsx` payload, plus `engines.node >=20.0.0`
+- Runtime smoke installs the packed package as a consumer with npm and verifies default/server imports, raw TSX resolution, CLI startup, GUI assets and runtime engine metadata.
+- `desktop-smoke` launches the installed package on Linux and macOS and verifies the real main/preload/renderer, six tabs, version, manual refresh, hidden-window tray refresh and quitting. Provider data is fixture-backed; this is not live quota validation.
+- `required-gate` fails when any quality, consumer or desktop job fails or is skipped.
 
-Release workflow `.github/workflows/publish-npm.yml` runs on release/manual dispatch and uses pnpm for version sync, install, typecheck, build, and test before publishing. It keeps `npm publish --access public` only for the npm registry publish step.
+Release workflow `.github/workflows/publish-npm.yml` publishes only `@thanhndv212/opencode-quota` from an existing version-matching tag. It tests and smokes the exact tarball before publishing it with provenance, using `next` for prereleases. Configure npm trusted publishing for this repository/workflow/environment before enabling publication. Version changes belong in a reviewed PR before tagging; the workflow never edits versions or pushes commits.
+
+`.github/workflows/desktop-artifacts.yml` prepares unsigned desktop candidates and checksums for review from a selected commit/tag. It does not publish a GitHub release or install over the maintainer's application. Artifact generation is distinct from signed/notarized release validation.
 
 ## Branch Protection (Maintainers)
 
@@ -73,7 +77,7 @@ Recommended settings for `main`:
 
 - Require a pull request before merging.
 - Require branches to be up to date before merging.
-- Require status checks from workflow `CI` for `pnpm-quality` and every `runtime-smoke` matrix entry.
+- Require the `required-gate` check from workflow `CI`; it requires all applicable quality, runtime and desktop jobs.
 - Select checks exactly as GitHub displays them in repository settings.
 - Typical names look like `pnpm-quality`, `runtime-smoke (20.x)`, `runtime-smoke (22.x)` or `CI / ...` variants.
 - Block direct pushes to `main` for non-admin users.

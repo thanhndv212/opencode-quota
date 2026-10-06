@@ -9,7 +9,11 @@ import type {
 import { Show, createEffect, createSignal, onCleanup } from "solid-js";
 
 import type { SessionTokenError } from "./lib/quota-status.js";
-import type { CompactStatusState, HomeBottomState, SidebarPanelState } from "./lib/tui-panel-state.js";
+import type {
+  CompactStatusState,
+  HomeBottomState,
+  SidebarPanelState,
+} from "./lib/tui-panel-state.js";
 
 import {
   getCompactStatusText,
@@ -37,7 +41,7 @@ import {
   type QuotaDialogCommandId,
 } from "./lib/quota-dialog-commands.js";
 
-const id = "@slkiser/opencode-quota";
+const id = "@thanhndv212/opencode-quota";
 // Place Quota near the top so variable-height built-in sections
 // (MCP/LSP/Todo/Files) do not push it below the visible fold.
 const SIDEBAR_ORDER = 150;
@@ -657,7 +661,9 @@ async function runQuotaDialogCommandAsync(
       <CommandOutputDialog api={api} title={result.title} output={result.output} />
     ));
   } catch (error) {
-    replaceDialog(api, "large", () => <CommandErrorDialog api={api} title={spec.title} error={error} />);
+    replaceDialog(api, "large", () => (
+      <CommandErrorDialog api={api} title={spec.title} error={error} />
+    ));
     (api as any).ui?.toast?.({
       variant: "error",
       message: "OpenCode Quota command failed",

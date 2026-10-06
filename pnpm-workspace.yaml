@@ -1,6 +1,15 @@
 packages: []
+# pnpm 10.0.0 uses onlyBuiltDependencies; allowBuilds is understood by newer
+# pnpm releases. Keep both lists aligned while this CLI remains pinned.
+onlyBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - electron-winstaller
+  - esbuild
+  - msgpackr-extract
 allowBuilds:
   better-sqlite3: true
+  electron: true
   electron-winstaller: true
   esbuild: true
   msgpackr-extract: true

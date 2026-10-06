@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pnpm-quality:
     runs-on: ubuntu-latest
@@ -66,34 +73,59 @@ jobs:
           name: package-tarball
           path: package-artifacts
 
-      - name: Smoke test published package on Node ${{ matrix.node-version }}
+      - uses: actions/checkout@v6
+
+      - name: Smoke test installed tarball
         run: |
           TARBALL="$(find "$GITHUB_WORKSPACE/package-artifacts" -name '*.tgz' -print -quit)"
-          if [ -z "$TARBALL" ]; then
-            echo "Package tarball artifact not found" >&2
-            exit 1
+          test -n "$TARBALL"
+          node scripts/smoke-package.mjs "$TARBALL"
+
+  desktop-smoke:
+    runs-on: ${{ matrix.os }}
+    needs: pnpm-quality
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: package-tarball
+          path: package-artifacts
+      - name: Smoke installed Electron app
+        shell: bash
+        run: |
+          TARBALL="$(find "$GITHUB_WORKSPACE/package-artifacts" -name '*.tgz' -print -quit)"
+          test -n "$TARBALL"
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a node scripts/smoke-gui.mjs "$TARBALL"
+          else
+            node scripts/smoke-gui.mjs "$TARBALL"
           fi
 
-          WORKDIR="$(mktemp -d)"
-          cd "$WORKDIR"
-          npm init -y
-          npm install --omit=dev "$TARBALL"
-          node --input-type=module <<'EOF'
-          import assert from "node:assert/strict";
-          import { readFile } from "node:fs/promises";
-          import { fileURLToPath } from "node:url";
-
-          await import("@slkiser/opencode-quota");
-          await import("@slkiser/opencode-quota/server");
-
-          const tuiExportUrl = import.meta.resolve("@slkiser/opencode-quota/tui");
-          const tuiExportPath = fileURLToPath(tuiExportUrl);
-          assert.match(tuiExportPath, /node_modules\/\@slkiser\/opencode-quota\/dist\/tui\.tsx$/);
-          const tuiSource = await readFile(tuiExportPath, "utf8");
-          assert.ok(tuiSource.includes("@slkiser/opencode-quota"));
-          assert.ok(tuiSource.includes("const pluginModule"));
-          assert.ok(tuiSource.includes("tui"));
-
-          const pkg = JSON.parse(await readFile("node_modules/@slkiser/opencode-quota/package.json", "utf8"));
-          assert.equal(pkg.engines?.node, ">=20.0.0");
-          EOF
+  required-gate:
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [pnpm-quality, runtime-smoke, desktop-smoke]
+    steps:
+      - name: Require every applicable job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node --input-type=module -e '
+            const jobs = JSON.parse(process.env.RESULTS);
+            if (Object.values(jobs).some(job => job.result !== "success")) {
+              console.error(jobs);
+              process.exit(1);
+            }
+          '

@@ -23,8 +23,9 @@ jobs:
           script: |
             const issue = context.payload.issue;
 
-            if (issue.user?.login === "slkiser") {
-              core.info("Skipping malformed issue auto-close for slkiser-authored issue.");
+            if (issue.user?.login === context.repo.owner ||
+                (issue.labels || []).some((label) => ["roadmap", "epic"].includes(label.name))) {
+              core.info("Skipping template validation for maintainer-authored or roadmap issues.");
               return;
             }
 
@@ -238,7 +239,7 @@ jobs:
               "",
               guidance,
               "",
-              "You may also add the missing details in a follow-up comment and ping @slkiser to request a manual reopen.",
+              `You may also add the missing details in a follow-up comment and ping @${context.repo.owner} to request a manual reopen.`,
               "",
               "You can open a new issue here: https://github.com/thanhndv212/opencode-quota/issues/new/choose"
             ].join("\n");

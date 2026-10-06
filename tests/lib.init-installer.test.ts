@@ -69,6 +69,39 @@ describe("init installer planning and merge behavior", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  it("preserves upstream installs without loading both quota plugins and explains migration", async () => {
+    writeFileSync(
+      join(tempDir, "opencode.json"),
+      JSON.stringify({ plugin: ["@slkiser/opencode-quota@3.10.1"] }),
+    );
+    writeFileSync(
+      join(tempDir, "tui.json"),
+      JSON.stringify({ plugin: ["@slkiser/opencode-quota"] }),
+    );
+    const plan = await planInitInstaller({
+      cwd: tempDir,
+      selections: {
+        scope: "project",
+        quotaUi: ["sidebar"],
+        providerMode: "auto",
+        manualProviders: [],
+        formatStyle: "allWindows",
+        percentDisplayMode: "remaining",
+        showSessionTokens: false,
+      },
+    });
+    await applyInitInstallerPlan(plan);
+    expect(readJson(join(tempDir, "opencode.json")).plugin).toEqual([
+      "@slkiser/opencode-quota@3.10.1",
+    ]);
+    expect(readJson(join(tempDir, "tui.json")).plugin).toEqual(["@slkiser/opencode-quota"]);
+    for (const kind of ["opencode", "tui"]) {
+      expect(plan.edits.find((edit) => edit.kind === kind)?.warnings.join(" ")).toContain(
+        "Replace @slkiser/opencode-quota",
+      );
+    }
+  });
+
   it("creates project opencode.json at the worktree root for toast mode", async () => {
     const projectDir = join(tempDir, "project");
     const nestedDir = join(projectDir, "packages", "feature");
@@ -107,7 +140,7 @@ describe("init installer planning and merge behavior", () => {
     const config = readJson(join(projectDir, "opencode.json"));
     expect(config).toMatchObject({
       $schema: "https://opencode.ai/config.json",
-      plugin: ["@slkiser/opencode-quota"],
+      plugin: ["@thanhndv212/opencode-quota"],
     });
     expect(config.experimental).toBeUndefined();
 
@@ -216,13 +249,9 @@ describe("init installer planning and merge behavior", () => {
       "Existing JSONC comments/trailing commas will be stripped.",
     );
     expect(opencodeEdit?.addedPlugins).toEqual([]);
-    expect(opencodeEdit?.addedKeys).toEqual(
-      [],
-    );
+    expect(opencodeEdit?.addedKeys).toEqual([]);
     expect(opencodeEdit?.skippedValues).toEqual(
-      expect.arrayContaining([
-        "plugin already includes @slkiser/opencode-quota",
-      ]),
+      expect.arrayContaining(["plugin already includes @thanhndv212/opencode-quota"]),
     );
     const quotaEdit = plan.edits.find((edit) => edit.kind === "quota");
     expect(quotaEdit?.addedKeys).toEqual(
@@ -240,7 +269,9 @@ describe("init installer planning and merge behavior", () => {
       ]),
     );
     expect(tuiEdit?.addedPlugins).toEqual([]);
-    expect(tuiEdit?.skippedValues).toContain("tui config already includes @slkiser/opencode-quota");
+    expect(tuiEdit?.skippedValues).toContain(
+      "tui config already includes @thanhndv212/opencode-quota",
+    );
 
     await applyInitInstallerPlan(plan);
 
@@ -297,14 +328,14 @@ describe("init installer planning and merge behavior", () => {
     });
 
     const opencodeEdit = plan.edits.find((edit) => edit.kind === "opencode");
-    expect(opencodeEdit?.addedPlugins).toEqual(["plugin: @slkiser/opencode-quota"]);
+    expect(opencodeEdit?.addedPlugins).toEqual(["plugin: @thanhndv212/opencode-quota"]);
 
     await applyInitInstallerPlan(plan);
 
     const opencode = readJson(join(projectDir, "opencode.json"));
     expect(opencode.plugin).toEqual([
       "file:///Users/test/Downloads/GitHub/opencode-quota/dist/tui.tsx",
-      "@slkiser/opencode-quota",
+      "@thanhndv212/opencode-quota",
     ]);
   });
 
@@ -315,7 +346,7 @@ describe("init installer planning and merge behavior", () => {
     writeFileSync(
       join(projectDir, "tui.json"),
       JSON.stringify({
-        plugin: ["@slkiser/opencode-quota"],
+        plugin: ["@thanhndv212/opencode-quota"],
       }),
       "utf8",
     );
@@ -338,7 +369,7 @@ describe("init installer planning and merge behavior", () => {
     await applyInitInstallerPlan(plan);
 
     const tui = readJson(join(projectDir, "tui.json"));
-    expect(tui).toEqual({ plugin: ["@slkiser/opencode-quota"] });
+    expect(tui).toEqual({ plugin: ["@thanhndv212/opencode-quota"] });
     const quotaConfig = readJson(join(projectDir, "opencode-quota", "quota-toast.json"));
     expect(quotaConfig.tuiSidebarPanel).toEqual({ enabled: false });
   });
@@ -369,14 +400,14 @@ describe("init installer planning and merge behavior", () => {
     });
 
     const tuiEdit = plan.edits.find((edit) => edit.kind === "tui");
-    expect(tuiEdit?.addedPlugins).toEqual(["plugin: @slkiser/opencode-quota"]);
+    expect(tuiEdit?.addedPlugins).toEqual(["plugin: @thanhndv212/opencode-quota"]);
 
     await applyInitInstallerPlan(plan);
 
     const tui = readJson(join(projectDir, "tui.json"));
     expect(tui.plugin).toEqual([
       "file:///Users/test/Downloads/GitHub/opencode-quota/dist/index.js",
-      "@slkiser/opencode-quota",
+      "@thanhndv212/opencode-quota",
     ]);
   });
 
@@ -404,7 +435,7 @@ describe("init installer planning and merge behavior", () => {
     const opencode = readJson(join(projectDir, "opencode.json"));
     const tui = readJson(join(projectDir, "tui.json"));
 
-    expect(opencode.plugin).toEqual(["@slkiser/opencode-quota"]);
+    expect(opencode.plugin).toEqual(["@thanhndv212/opencode-quota"]);
     expect(opencode.experimental).toBeUndefined();
     const quotaConfig = readJson(join(projectDir, "opencode-quota", "quota-toast.json"));
     expect(quotaConfig).toMatchObject({
@@ -417,7 +448,7 @@ describe("init installer planning and merge behavior", () => {
     });
     expect(tui).toEqual({
       $schema: "https://opencode.ai/tui.json",
-      plugin: ["@slkiser/opencode-quota"],
+      plugin: ["@thanhndv212/opencode-quota"],
     });
   });
 
@@ -929,19 +960,37 @@ describe("init installer planning and merge behavior", () => {
       required: true,
     });
     expect(prompts.multiselectCalls[0]?.options).toEqual([
-      { label: "Toast", value: "toast", hint: "popup quota summaries after idle/question/compact events" },
-      { label: "Sidebar panel", value: "sidebar", hint: "full Quota panel in the OpenCode session sidebar" },
-      { label: "Compact status line", value: "compact_status", hint: "short quota summary in the TUI status area" },
+      {
+        label: "Toast",
+        value: "toast",
+        hint: "popup quota summaries after idle/question/compact events",
+      },
+      {
+        label: "Sidebar panel",
+        value: "sidebar",
+        hint: "full Quota panel in the OpenCode session sidebar",
+      },
+      {
+        label: "Compact status line",
+        value: "compact_status",
+        hint: "short quota summary in the TUI status area",
+      },
       {
         label: "No automatic UI surfaces",
         value: "none",
         hint: "no toast, sidebar, compact status, or TUI dialogs; server slash commands stay installed",
       },
     ]);
-    const sessionTokenCall = prompts.selectCalls.find((call) => call.message === "Session token details");
+    const sessionTokenCall = prompts.selectCalls.find(
+      (call) => call.message === "Session token details",
+    );
     expect(sessionTokenCall?.options).toEqual([
       { label: "Hide session tokens", value: "no", hint: "keep quota output shorter" },
-      { label: "Show session tokens", value: "yes", hint: "include current session input/output token counts when available" },
+      {
+        label: "Show session tokens",
+        value: "yes",
+        hint: "include current session input/output token counts when available",
+      },
     ]);
     const messages = prompts.selectCalls.map((call) => call.message);
     expect(messages).not.toContain("Compact TUI status");
@@ -1004,7 +1053,7 @@ describe("init installer planning and merge behavior", () => {
     const opencode = readJson(join(projectDir, "opencode.json"));
     const tui = readJson(join(projectDir, "tui.json"));
 
-    expect(opencode.plugin).toEqual(["@slkiser/opencode-quota"]);
+    expect(opencode.plugin).toEqual(["@thanhndv212/opencode-quota"]);
     expect(opencode.experimental).toBeUndefined();
     const quotaConfig = readJson(join(projectDir, "opencode-quota", "quota-toast.json"));
     expect(quotaConfig).toMatchObject({
@@ -1017,7 +1066,7 @@ describe("init installer planning and merge behavior", () => {
     });
     expect(tui).toEqual({
       $schema: "https://opencode.ai/tui.json",
-      plugin: ["@slkiser/opencode-quota"],
+      plugin: ["@thanhndv212/opencode-quota"],
     });
   });
 
@@ -1044,7 +1093,7 @@ describe("init installer planning and merge behavior", () => {
 
     expect(existsSync(join(projectDir, "tui.json"))).toBe(false);
     const opencode = readJson(join(projectDir, "opencode.json"));
-    expect(opencode.plugin).toEqual(["@slkiser/opencode-quota"]);
+    expect(opencode.plugin).toEqual(["@thanhndv212/opencode-quota"]);
     expect(opencode.experimental).toBeUndefined();
     const quotaConfig = readJson(join(projectDir, "opencode-quota", "quota-toast.json"));
     expect(quotaConfig.enableToast).toBe(false);

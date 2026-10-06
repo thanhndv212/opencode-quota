@@ -51,7 +51,7 @@ describe("inspectTuiConfig", () => {
       join(projectDir, "tui.jsonc"),
       `{
         // local project tui config
-        "plugin": ["@slkiser/opencode-quota"]
+        "plugin": ["@thanhndv212/opencode-quota"]
       }`,
       "utf8",
     );
@@ -81,7 +81,9 @@ describe("inspectTuiConfig", () => {
     writeFileSync(
       join(projectDir, "tui.json"),
       JSON.stringify({
-        plugin: [["file:///Users/test/Downloads/GitHub/opencode-quota/dist/tui.tsx", { debug: true }]],
+        plugin: [
+          ["file:///Users/test/Downloads/GitHub/opencode-quota/dist/tui.tsx", { debug: true }],
+        ],
       }),
       "utf8",
     );
@@ -117,7 +119,7 @@ describe("inspectTuiConfig", () => {
 
     writeFileSync(
       join(projectDir, ".opencode", "tui.json"),
-      JSON.stringify({ plugin: ["@slkiser/opencode-quota"] }),
+      JSON.stringify({ plugin: ["@thanhndv212/opencode-quota"] }),
       "utf8",
     );
 
@@ -140,7 +142,7 @@ describe("inspectTuiConfig", () => {
 
     writeFileSync(
       join(projectDir, ".opencode", "tui.json"),
-      JSON.stringify({ plugin: ["@slkiser/opencode-quota"] }),
+      JSON.stringify({ plugin: ["@thanhndv212/opencode-quota"] }),
       "utf8",
     );
 
@@ -162,7 +164,7 @@ describe("inspectTuiConfig", () => {
 
     writeFileSync(
       join(projectDir, ".opencode", "tui.json"),
-      JSON.stringify({ plugin: ["@slkiser/opencode-quota"] }),
+      JSON.stringify({ plugin: ["@thanhndv212/opencode-quota"] }),
       "utf8",
     );
 

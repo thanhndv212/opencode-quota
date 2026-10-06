@@ -88,7 +88,7 @@ vi.mock("../src/lib/alibaba-auth.js", () =>
 );
 
 vi.mock("../src/lib/opencode-runtime-paths.js", () =>
-  createPluginRuntimePathsMockModule(TEST_RUNTIME_ROOT),
+  createPluginRuntimePathsMockModule(TEST_RUNTIME_ROOT, { includeCandidates: true }),
 );
 
 describe("/quota command behavior", () => {
