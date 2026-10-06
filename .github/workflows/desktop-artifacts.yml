@@ -48,7 +48,14 @@ jobs:
             pnpm run smoke:gui
           fi
       - name: Package unsigned candidate
-        run: pnpm run build:package:${{ matrix.platform }} -- --publish never
+        shell: bash
+        run: |
+          pnpm run build:icons
+          if [ "$RUNNER_OS" = macOS ]; then
+            pnpm exec electron-builder --mac --publish never -c.mac.identity=null -c.mac.hardenedRuntime=false
+          else
+            pnpm exec electron-builder --linux --publish never
+          fi
       - name: Record candidate provenance and checksums
         shell: bash
         run: |
