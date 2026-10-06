@@ -26,6 +26,10 @@ async function main() {
   await mkdir(rendererDist, { recursive: true });
   await mkdir(join(rendererDist, "styles"), { recursive: true });
 
+  // Electron requires an .mjs extension to load an ESM preload. The compiler
+  // emits .js, which Electron would otherwise interpret as CommonJS.
+  await cp(join(distDir, "preload.js"), join(distDir, "preload.mjs"));
+
   console.log("  Copying renderer HTML...");
   await cp(join(rendererSrc, "index.html"), join(rendererDist, "index.html"));
 

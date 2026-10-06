@@ -1,0 +1,83 @@
+name: Desktop candidate artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Reviewed commit SHA or existing release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.x
+      - name: Activate pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.0.0 --activate
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+      - run: pnpm test
+      - name: Validate installed desktop runtime
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a pnpm run smoke:gui
+          else
+            pnpm run smoke:gui
+          fi
+      - name: Package unsigned candidate
+        run: pnpm run build:package:${{ matrix.platform }} -- --publish never
+      - name: Record candidate provenance and checksums
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import { execFileSync } from "node:child_process";
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            fs.writeFileSync("release/CANDIDATE.json", JSON.stringify({
+              name: pkg.name, version: pkg.version,
+              commit: execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim(),
+              node: process.version, os: process.platform, arch: process.arch,
+              signing: "unsigned candidate; install/Gatekeeper validation pending"
+            }, null, 2));
+          '
+          python3 - <<'PY'
+          import hashlib, pathlib
+          root = pathlib.Path("release")
+          artifacts = sorted(p for p in root.iterdir() if p.suffix in (".dmg", ".zip", ".AppImage", ".deb"))
+          if not artifacts: raise SystemExit("No desktop artifacts generated")
+          (root / "SHA256SUMS").write_text("".join(hashlib.sha256(p.read_bytes()).hexdigest() + "  " + p.name + "\n" for p in artifacts))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-candidate-${{ matrix.platform }}
+          if-no-files-found: error
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.AppImage
+            release/*.deb
+            release/SHA256SUMS
+            release/CANDIDATE.json

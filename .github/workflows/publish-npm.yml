@@ -1,122 +1,75 @@
-name: Publish to npm on release
+name: Publish fork package
 
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tested release tag (for example v3.10.2)
+        required: true
+        type: string
+      prerelease:
+        description: Publish to the next dist-tag
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    environment: npm
     permissions:
-      contents: write
+      contents: read
       id-token: write
-
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      DIST_TAG: ${{ (inputs.prerelease || github.event.release.prerelease) && 'next' || 'latest' }}
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
           fetch-depth: 0
-          fetch-tags: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org/
-
+      - name: Verify release identity and immutable version
+        run: |
+          node scripts/verify-release-version.mjs
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (pkg.name !== "@thanhndv212/opencode-quota") throw new Error("Unexpected npm publishing target");
+          '
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
       - name: Activate pnpm
         run: |
           corepack enable
           corepack prepare pnpm@10.0.0 --activate
-
-      - name: Sync package.json version from release tag
-        if: github.event_name == 'release'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+      - run: pnpm test
+      - name: Pack and verify the publishable artifact
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          echo "Setting package.json version to $VERSION (from tag $TAG)"
-          pnpm version "$VERSION" --no-git-tag-version --allow-same-version
-          pnpm install --lockfile-only
-
-      - name: Verify package.json version matches release tag
-        if: github.event_name == 'release'
-        run: pnpm run verify:release-version
-
-      - name: Assert ref is a tag (release only)
-        if: github.event_name == 'release'
+          mkdir -p package-artifacts
+          pnpm pack --pack-destination package-artifacts
+          TARBALL="$(find package-artifacts -name '*.tgz' -print -quit)"
+          node scripts/smoke-package.mjs "$TARBALL"
+          xvfb-run -a node scripts/smoke-gui.mjs "$TARBALL"
+          sha256sum "$TARBALL" > package-artifacts/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-release-package
+          path: package-artifacts/*
+      - name: Publish verified fork tarball
         run: |
-          echo "GITHUB_REF=$GITHUB_REF"
-          case "$GITHUB_REF" in
-            refs/tags/*) echo "ok" ;;
-            *) echo "Expected refs/tags/* for release publish" >&2; exit 1 ;;
-          esac
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      - name: Build
-        run: pnpm run build
-
-      - name: Test
-        run: pnpm test
-
-      - name: Publish
-        run: npm publish --access public
-
-      - name: Commit synced version back to repository
-        if: github.event_name == 'release'
-        env:
-          TARGET_BRANCH: ${{ github.event.release.target_commitish }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          if git diff --quiet -- package.json pnpm-lock.yaml; then
-            echo "No package version file changes to commit."
-            exit 0
-          fi
-
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          BRANCH="${TARGET_BRANCH:-$DEFAULT_BRANCH}"
-
-          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            echo "Target '$BRANCH' is not a remote branch; falling back to '$DEFAULT_BRANCH'."
-            BRANCH="$DEFAULT_BRANCH"
-          fi
-
-          echo "Committing synced package version to branch '$BRANCH'"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml
-          git commit -m "chore(release): sync package version to ${VERSION}"
-
-          git fetch origin "$BRANCH"
-          git rebase "origin/$BRANCH"
-          git push origin HEAD:"$BRANCH"
-
-      - name: Verify committed sync reached remote branch
-        if: github.event_name == 'release'
-        env:
-          TARGET_BRANCH: ${{ github.event.release.target_commitish }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: |
-          BRANCH="${TARGET_BRANCH:-$DEFAULT_BRANCH}"
-          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
-            BRANCH="$DEFAULT_BRANCH"
-          fi
-
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          git fetch origin "$BRANCH"
-          REMOTE_VERSION="$(git show "origin/$BRANCH:package.json" | node -e "process.stdin.setEncoding('utf8'); let d=''; process.stdin.on('data', c => d += c); process.stdin.on('end', () => console.log(JSON.parse(d).version || ''));")"
-
-          if [ "$REMOTE_VERSION" != "$VERSION" ]; then
-            echo "Remote branch $BRANCH package.json version is '$REMOTE_VERSION', expected '$VERSION'" >&2
-            exit 1
-          fi
-
-          echo "Remote branch $BRANCH package.json version matches release tag $TAG"
+          TARBALL="$(find package-artifacts -name '*.tgz' -print -quit)"
+          npm publish "$TARBALL" --access public --provenance --tag "$DIST_TAG"

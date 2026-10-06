@@ -15,7 +15,11 @@ if (!packageVersion) {
   process.exit(1);
 }
 
-const githubRef = process.env.GITHUB_REF ?? "";
+const releaseTag = process.env.RELEASE_TAG;
+if (releaseTag !== undefined && !/^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(releaseTag)) {
+  throw new Error("RELEASE_TAG must be a semantic-version release tag");
+}
+const githubRef = releaseTag ? `refs/tags/${releaseTag}` : (process.env.GITHUB_REF ?? "");
 const tagPrefix = "refs/tags/";
 
 if (!githubRef.startsWith(tagPrefix)) {

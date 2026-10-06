@@ -1,6 +1,15 @@
 packages: []
+# pnpm 10.0.0 reads package.json's pnpm.onlyBuiltDependencies; later
+# releases read workspace settings. Keep these lists aligned.
+onlyBuiltDependencies:
+  - better-sqlite3
+  - electron
+  - electron-winstaller
+  - esbuild
+  - msgpackr-extract
 allowBuilds:
   better-sqlite3: true
+  electron: true
   electron-winstaller: true
   esbuild: true
   msgpackr-extract: true

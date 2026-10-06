@@ -33,7 +33,7 @@ type ParsedShowArgs =
 
 const SHOW_USAGE = [
   "Usage:",
-  "  npx @slkiser/opencode-quota show [--provider <provider-id>] [--json] [--threshold <pct>]",
+  "  npx @thanhndv212/opencode-quota show [--provider <provider-id>] [--json] [--threshold <pct>]",
   "",
   "Options:",
   "  --provider <provider-id>  Show quota for one provider",
@@ -135,7 +135,11 @@ function cloneCliConfig(config: QuotaToastConfig): QuotaToastConfig {
   };
 }
 
-function resolveCliRoots(cwd: string): { workspaceRoot: string; configRoot: string; fallbackDirectory: string } {
+function resolveCliRoots(cwd: string): {
+  workspaceRoot: string;
+  configRoot: string;
+  fallbackDirectory: string;
+} {
   const fallbackDirectory = resolve(cwd);
   const worktreeRoot = findGitWorktreeRoot(fallbackDirectory) ?? fallbackDirectory;
   const configRoot = getEffectiveConfigRoot(worktreeRoot);

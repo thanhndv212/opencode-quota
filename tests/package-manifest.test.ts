@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { access, readFile } from "node:fs/promises";
 
-const pkg = JSON.parse(
-  await readFile(new URL("../package.json", import.meta.url), "utf8"),
-) as {
+const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as {
   main?: string;
   bin?: Record<string, string>;
   exports?: Record<string, { default?: string; types?: string }>;
@@ -16,6 +14,10 @@ const pkg = JSON.parse(
 
 const pnpmWorkspace = await readFile(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8");
 const ciWorkflow = await readFile(new URL("../.github/workflows/ci.yml", import.meta.url), "utf8");
+const consumerSmoke = await readFile(
+  new URL("../scripts/smoke-package.mjs", import.meta.url),
+  "utf8",
+);
 
 describe("package manifest compatibility", () => {
   it("requires pnpm 10+ development tooling while requiring Node 20+ at runtime", () => {
@@ -85,9 +87,9 @@ describe("package manifest compatibility", () => {
   });
 
   it("smoke-tests the TUI package export by resolving and reading it, not importing raw TSX", () => {
-    expect(ciWorkflow).toContain("@slkiser/opencode-quota/tui");
-    expect(ciWorkflow).toContain('import.meta.resolve("@slkiser/opencode-quota/tui")');
-    expect(ciWorkflow).toContain('readFile(tuiExportPath, "utf8")');
-    expect(ciWorkflow).not.toContain('await import("@slkiser/opencode-quota/tui")');
+    expect(ciWorkflow).toContain("scripts/smoke-package.mjs");
+    expect(consumerSmoke).toContain('import.meta.resolve(name + "/tui")');
+    expect(consumerSmoke).toContain('readFile(tui, "utf8")');
+    expect(consumerSmoke).not.toContain('await import(name + "/tui")');
   });
 });

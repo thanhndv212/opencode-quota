@@ -28,7 +28,7 @@ import {
 import { getQuotaToastConfigPath, QUOTA_TOAST_CONFIG_RELATIVE_PATH } from "./config.js";
 import type { QuotaToastConfig } from "./types.js";
 
-const QUOTA_PLUGIN_SPEC = "@slkiser/opencode-quota";
+const QUOTA_PLUGIN_SPEC = "@thanhndv212/opencode-quota";
 const OPENCODE_SCHEMA_URL = "https://opencode.ai/config.json";
 const TUI_SCHEMA_URL = "https://opencode.ai/tui.json";
 const GITHUB_REPO_URL = "https://github.com/thanhndv212/opencode-quota";
@@ -151,12 +151,7 @@ function jsonEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-const QUOTA_UI_CHOICE_ORDER: InitQuotaUiChoice[] = [
-  "toast",
-  "sidebar",
-  "compact_status",
-  "none",
-];
+const QUOTA_UI_CHOICE_ORDER: InitQuotaUiChoice[] = ["toast", "sidebar", "compact_status", "none"];
 
 function normalizeQuotaUiIntent(selections: InitInstallerSelections): NormalizedQuotaUiIntent {
   const legacySelections = selections as LegacyInitInstallerSelectionsInput;
@@ -169,7 +164,10 @@ function normalizeQuotaUiIntent(selections: InitInstallerSelections): Normalized
   const seen = new Set<InitQuotaUiChoice>();
 
   for (const rawChoice of rawChoices) {
-    if (typeof rawChoice !== "string" || !QUOTA_UI_CHOICE_ORDER.includes(rawChoice as InitQuotaUiChoice)) {
+    if (
+      typeof rawChoice !== "string" ||
+      !QUOTA_UI_CHOICE_ORDER.includes(rawChoice as InitQuotaUiChoice)
+    ) {
       throw new InitInstallerError(`Unknown Quota UI option: ${String(rawChoice)}`);
     }
     seen.add(rawChoice as InitQuotaUiChoice);
@@ -290,6 +288,15 @@ function appendQuotaPluginIfMissing(params: {
   });
 
   if (alreadyConfigured) {
+    if (
+      params.container.some((entry) =>
+        getPluginSpecFromEntry(entry)?.includes("@slkiser/opencode-quota"),
+      )
+    ) {
+      params.edit.warnings.push(
+        `Existing upstream quota plugin preserved. Replace @slkiser/opencode-quota with ${QUOTA_PLUGIN_SPEC} in both opencode and tui configs to switch to this fork.`,
+      );
+    }
     params.edit.skippedValues.push(`${params.pathLabel} already includes ${QUOTA_PLUGIN_SPEC}`);
     return;
   }
@@ -502,7 +509,13 @@ function planTuiCompactStatusConfig(params: {
     return;
   }
 
-  setInstallerOwnedSetting(tuiCompactStatus, "homeBottom", true, `${pathLabel}.homeBottom`, params.edit);
+  setInstallerOwnedSetting(
+    tuiCompactStatus,
+    "homeBottom",
+    true,
+    `${pathLabel}.homeBottom`,
+    params.edit,
+  );
   setInstallerOwnedSetting(
     tuiCompactStatus,
     "sessionPrompt",
@@ -560,9 +573,8 @@ async function readLegacyQuotaToastSeed(baseDir: string): Promise<JsonObject | n
 
   const root = await readExistingConfig(target);
   const experimental = isPlainObject(root.experimental) ? root.experimental : null;
-  const quotaToast = experimental && isPlainObject(experimental.quotaToast)
-    ? experimental.quotaToast
-    : null;
+  const quotaToast =
+    experimental && isPlainObject(experimental.quotaToast) ? experimental.quotaToast : null;
   return quotaToast ? cloneJsonObject(quotaToast) : null;
 }
 
@@ -812,6 +824,11 @@ async function planTuiEdit(params: {
 
   const existingPluginSpecs = extractPluginSpecsFromParsedConfig(root);
   if (existingPluginSpecs.some((spec) => isQuotaPluginSpec(spec, "tui"))) {
+    if (existingPluginSpecs.some((spec) => spec.includes("@slkiser/opencode-quota"))) {
+      edit.warnings.push(
+        `Existing upstream TUI plugin preserved. Replace @slkiser/opencode-quota with ${QUOTA_PLUGIN_SPEC} to switch to this fork.`,
+      );
+    }
     edit.skippedValues.push(`tui config already includes ${QUOTA_PLUGIN_SPEC}`);
   } else {
     const pluginTarget = ensureTuiPluginArray(root, edit);
@@ -1011,7 +1028,11 @@ async function promptForSelections(
     message: "Install scope",
     options: [
       { label: "Project config", value: "project", hint: "install only for this repo/worktree" },
-      { label: "Global OpenCode config", value: "global", hint: "install for all projects using your global config" },
+      {
+        label: "Global OpenCode config",
+        value: "global",
+        hint: "install for all projects using your global config",
+      },
     ],
   });
   if (prompts.isCancel(scope)) return null;
@@ -1020,9 +1041,21 @@ async function promptForSelections(
     message: "Quota UI",
     required: true,
     options: [
-      { label: "Toast", value: "toast", hint: "popup quota summaries after idle/question/compact events" },
-      { label: "Sidebar panel", value: "sidebar", hint: "full Quota panel in the OpenCode session sidebar" },
-      { label: "Compact status line", value: "compact_status", hint: "short quota summary in the TUI status area" },
+      {
+        label: "Toast",
+        value: "toast",
+        hint: "popup quota summaries after idle/question/compact events",
+      },
+      {
+        label: "Sidebar panel",
+        value: "sidebar",
+        hint: "full Quota panel in the OpenCode session sidebar",
+      },
+      {
+        label: "Compact status line",
+        value: "compact_status",
+        hint: "short quota summary in the TUI status area",
+      },
       {
         label: "No automatic UI surfaces",
         value: "none",
@@ -1038,8 +1071,16 @@ async function promptForSelections(
   const providerMode = await prompts.select({
     message: "Provider mode",
     options: [
-      { label: "Auto-detect providers", value: "auto", hint: "recommended; use providers found in your OpenCode/auth setup" },
-      { label: "Choose providers manually", value: "manual", hint: "only track the providers you select" },
+      {
+        label: "Auto-detect providers",
+        value: "auto",
+        hint: "recommended; use providers found in your OpenCode/auth setup",
+      },
+      {
+        label: "Choose providers manually",
+        value: "manual",
+        hint: "only track the providers you select",
+      },
     ],
   });
   if (prompts.isCancel(providerMode)) return null;
@@ -1086,7 +1127,11 @@ async function promptForSelections(
     message: "Session token details",
     options: [
       { label: "Hide session tokens", value: "no", hint: "keep quota output shorter" },
-      { label: "Show session tokens", value: "yes", hint: "include current session input/output token counts when available" },
+      {
+        label: "Show session tokens",
+        value: "yes",
+        hint: "include current session input/output token counts when available",
+      },
     ],
   });
   if (prompts.isCancel(showSessionTokens)) return null;
@@ -1118,7 +1163,7 @@ export async function runInitInstaller(params?: {
 }): Promise<number> {
   const prompts = params?.prompts ?? ((await import("@clack/prompts")) as unknown as PromptAdapter);
 
-  prompts.intro("Configure @slkiser/opencode-quota");
+  prompts.intro("Configure @thanhndv212/opencode-quota");
 
   try {
     const selections = await promptForSelections(prompts);
