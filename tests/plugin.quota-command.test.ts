@@ -212,7 +212,7 @@ describe("/quota command behavior", () => {
     expect(provider.fetch).not.toHaveBeenCalled();
     expect(client.tui.showToast).toHaveBeenCalledTimes(1);
     const message = getToastMessage(client);
-    expect(message).toContain("Copilot: Unavailable (not detected)");
+    expect(message).toContain("Copilot: Availability check failed");
   });
 
   it("shows explicit current-model skip errors in idle-triggered toasts", async () => {
@@ -553,7 +553,7 @@ describe("/quota command behavior", () => {
       expect(provider.isAvailable).toHaveBeenCalledTimes(1);
       expect(provider.fetch).not.toHaveBeenCalled();
       expect(client.tui.showToast).toHaveBeenCalledTimes(1);
-      expect(getToastMessage(client, 0)).toContain("OpenAI: Unavailable (not detected)");
+      expect(getToastMessage(client, 0)).toContain("OpenAI: Availability check failed");
 
       await vi.advanceTimersByTimeAsync(3_000);
 

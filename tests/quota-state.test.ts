@@ -43,6 +43,96 @@ describe("quota-state shared cache", () => {
     await rm(TEST_RUNTIME_ROOT, { recursive: true, force: true });
   });
 
+  it("retries error-only results immediately and never persists them", async () => {
+    const { fetchQuotaProviderResult } = await import("../src/lib/quota-state.js");
+    const failure = {
+      attempted: true,
+      entries: [],
+      errors: [{ label: "Synthetic", message: "Temporary failure" }],
+    };
+    const healthy = {
+      attempted: true,
+      entries: [{ name: "Synthetic", percentRemaining: 55 }],
+      errors: [],
+    };
+    const provider = {
+      id: "synthetic",
+      fetch: vi.fn().mockResolvedValueOnce(failure).mockResolvedValue(healthy),
+    } as any;
+    const params = { provider, ctx: createTestContext(), ttlMs: 60_000 };
+    expect(await fetchQuotaProviderResult(params)).toEqual(failure);
+    const files = await readdir(`${TEST_RUNTIME_ROOT}/cache/quota-provider-state`).catch(() => []);
+    expect(files.filter((file) => file.endsWith(".json"))).toEqual([]);
+    expect(await fetchQuotaProviderResult(params)).toEqual(healthy);
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores an error-only snapshot left on disk by an older build", async () => {
+    const state = await import("../src/lib/quota-state.js");
+    const healthy = {
+      attempted: true,
+      entries: [{ name: "Synthetic", percentRemaining: 55 }],
+      errors: [],
+    };
+    const provider = { id: "synthetic", fetch: vi.fn().mockResolvedValue(healthy) } as any;
+    const params = { provider, ctx: createTestContext(), ttlMs: 60_000 };
+    await state.fetchQuotaProviderResult(params);
+    const path = state.getQuotaProviderStateCacheFilePath(
+      provider.id,
+      state.buildQuotaProviderStateCacheKey(provider.id, params.ctx),
+    );
+    const { readFile } = await import("fs/promises");
+    const persisted = JSON.parse(await readFile(path, "utf8"));
+    persisted.result = {
+      attempted: true,
+      entries: [],
+      errors: [{ label: "Synthetic", message: "Old failure" }],
+    };
+    await writeFile(path, JSON.stringify(persisted));
+    vi.resetModules();
+    const freshState = await import("../src/lib/quota-state.js");
+    expect(await freshState.fetchQuotaProviderResult(params)).toEqual(healthy);
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves the prior observation and its timestamp after a failed refresh", async () => {
+    const { fetchQuotaProviderResult, readCachedProviderResult } =
+      await import("../src/lib/quota-state.js");
+    const healthy = {
+      attempted: true,
+      entries: [{ name: "Synthetic", percentRemaining: 55 }],
+      errors: [],
+    };
+    const failure = {
+      attempted: true,
+      entries: [],
+      errors: [{ label: "Synthetic", message: "Temporary failure" }],
+    };
+    const provider = {
+      id: "synthetic",
+      fetch: vi.fn().mockResolvedValueOnce(healthy).mockResolvedValue(failure),
+    } as any;
+    const params = { provider, ctx: createTestContext(), ttlMs: 0 };
+    await fetchQuotaProviderResult(params);
+    const before = await readCachedProviderResult(params);
+    expect(await fetchQuotaProviderResult(params)).toEqual(failure);
+    expect(await readCachedProviderResult(params)).toEqual(before);
+  });
+
+  it("keeps partial results visibly partial when cached", async () => {
+    const { fetchQuotaProviderResult } = await import("../src/lib/quota-state.js");
+    const partial = {
+      attempted: true,
+      entries: [{ name: "Account A", percentRemaining: 55 }],
+      errors: [{ label: "Account B", message: "Unavailable" }],
+    };
+    const provider = { id: "synthetic", fetch: vi.fn().mockResolvedValue(partial) } as any;
+    const params = { provider, ctx: createTestContext(), ttlMs: 60_000 };
+    expect(await fetchQuotaProviderResult(params)).toEqual(partial);
+    expect(await fetchQuotaProviderResult(params)).toEqual(partial);
+    expect(provider.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("builds a provider cache key that ignores formatStyle-like extras", async () => {
     const { buildQuotaProviderStateCacheKey } = await import("../src/lib/quota-state.js");
     const base = createTestContext();
@@ -60,9 +150,8 @@ describe("quota-state shared cache", () => {
   });
 
   it("returns cache-owned clones for repeated non-live provider reads", async () => {
-    const { __resetQuotaStateForTests, fetchQuotaProviderResult } = await import(
-      "../src/lib/quota-state.js"
-    );
+    const { __resetQuotaStateForTests, fetchQuotaProviderResult } =
+      await import("../src/lib/quota-state.js");
     __resetQuotaStateForTests();
 
     const provider = {
@@ -80,11 +169,11 @@ describe("quota-state shared cache", () => {
             resetTimeIso: "2026-04-21T18:00:00.000Z",
           },
         ],
-      errors: [],
-      presentation: {
-        singleWindowShowRight: true,
-      },
-    }),
+        errors: [],
+        presentation: {
+          singleWindowShowRight: true,
+        },
+      }),
     } as any;
 
     const first = await fetchQuotaProviderResult({
@@ -271,7 +360,11 @@ describe("quota-state shared cache", () => {
         key,
         providerId: provider.id,
         timestamp: Date.now(),
-        result: { attempted: true, entries: [{ name: "Synthetic", percentRemaining: 10 }], errors: [] },
+        result: {
+          attempted: true,
+          entries: [{ name: "Synthetic", percentRemaining: 10 }],
+          errors: [],
+        },
       }),
       "utf-8",
     );
@@ -308,7 +401,11 @@ describe("quota-state shared cache", () => {
         key,
         providerId: provider.id,
         timestamp: Date.now(),
-        result: { attempted: true, entries: [{ name: "Synthetic", percentRemaining: 10 }], errors: [] },
+        result: {
+          attempted: true,
+          entries: [{ name: "Synthetic", percentRemaining: 10 }],
+          errors: [],
+        },
       }),
       "utf-8",
     );
@@ -321,9 +418,8 @@ describe("quota-state shared cache", () => {
   });
 
   it("bypasses persistence entirely for live-local providers", async () => {
-    const { __resetQuotaStateForTests, fetchQuotaProviderResult } = await import(
-      "../src/lib/quota-state.js"
-    );
+    const { __resetQuotaStateForTests, fetchQuotaProviderResult } =
+      await import("../src/lib/quota-state.js");
     __resetQuotaStateForTests();
 
     const provider = {
@@ -366,9 +462,8 @@ describe("readCachedProviderResult", () => {
   });
 
   it("returns { hit: false } when no memory or disk cache entry exists", async () => {
-    const { __resetQuotaStateForTests, readCachedProviderResult } = await import(
-      "../src/lib/quota-state.js"
-    );
+    const { __resetQuotaStateForTests, readCachedProviderResult } =
+      await import("../src/lib/quota-state.js");
     __resetQuotaStateForTests();
 
     const provider = {

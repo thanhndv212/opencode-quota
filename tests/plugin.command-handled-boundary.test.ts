@@ -183,8 +183,7 @@ describe("plugin command handled boundary", () => {
         }),
       }),
     );
-    expect(getPromptText(client)).toContain("Quota unavailable");
-    expect(getPromptText(client)).toContain("No quota providers detected");
+    expect(getPromptText(client)).toContain("boom-provider: Availability check failed");
   });
 
   it("propagates server slash command injection failures instead of throwing handled", async () => {
@@ -228,8 +227,9 @@ describe("plugin command handled boundary", () => {
     const result = await buildDialogOutput({ command: "quota", client, sessionID: "session-2" });
 
     expect(result.state).toBe("output");
-    expect(result.state === "output" ? result.output : "").toContain("Quota unavailable");
-    expect(result.state === "output" ? result.output : "").toContain("No quota providers detected");
+    expect(result.state === "output" ? result.output : "").toContain(
+      "boom-provider: Availability check failed",
+    );
     expect(client.session.prompt).not.toHaveBeenCalled();
   });
 
@@ -252,7 +252,11 @@ describe("plugin command handled boundary", () => {
     mocks.loadConfig.mockResolvedValue(makeQuotaToastTestConfig({ enabled: false }));
     const client = createClient();
 
-    const daily = await buildDialogOutput({ command: "tokens_daily", client, sessionID: "session-disabled" });
+    const daily = await buildDialogOutput({
+      command: "tokens_daily",
+      client,
+      sessionID: "session-disabled",
+    });
     const tree = await buildDialogOutput({
       command: "tokens_session_all",
       client,

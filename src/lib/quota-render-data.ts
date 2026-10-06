@@ -17,10 +17,7 @@ import { fetchSessionTokensForDisplay } from "./session-tokens.js";
 import { getQuotaProviderDisplayLabel, normalizeQuotaProviderId } from "./provider-metadata.js";
 import { isCursorProviderId } from "./cursor-pricing.js";
 import { fetchQuotaProviderResult } from "./quota-state.js";
-import {
-  DEFAULT_QUOTA_FORMAT_STYLE,
-  getQuotaFormatStyleDefinition,
-} from "./quota-format-style.js";
+import { DEFAULT_QUOTA_FORMAT_STYLE, getQuotaFormatStyleDefinition } from "./quota-format-style.js";
 import { formatGroupedHeader } from "./grouped-header-format.js";
 import { getProviders } from "../providers/registry.js";
 import { getAnthropicNoDataMessage } from "../providers/anthropic.js";
@@ -338,10 +335,7 @@ export async function collectQuotaStatusLiveProbes(params: {
   }));
 }
 
-function stripSingleWindowEntryMeta(
-  entry: QuotaToastEntry,
-  showRight: boolean,
-): QuotaToastEntry {
+function stripSingleWindowEntryMeta(entry: QuotaToastEntry, showRight: boolean): QuotaToastEntry {
   const { group: _group, label: _label, ...withoutGroupLabel } = entry;
   if (showRight) {
     return { ...withoutGroupLabel };
@@ -413,9 +407,10 @@ function normalizeSingleWindowPresentation(
       : typeof legacyPresentation.classicShowRight === "boolean"
         ? legacyPresentation.classicShowRight
         : false;
-  const classicStrategy = legacyPresentation.classicStrategy === "preserve"
-    ? legacyPresentation.classicStrategy
-    : undefined;
+  const classicStrategy =
+    legacyPresentation.classicStrategy === "preserve"
+      ? legacyPresentation.classicStrategy
+      : undefined;
 
   return {
     ...(singleWindowDisplayName ? { singleWindowDisplayName } : {}),
@@ -552,9 +547,17 @@ export async function collectQuotaRenderData(params: {
     ),
   );
 
+  const failedAvailability = new Set(
+    availability.filter((item) => item.error).map((item) => item.provider.id),
+  );
+  const availabilityErrors: QuotaToastError[] = [...failedAvailability].map((id) => ({
+    label: getQuotaProviderDisplayLabel(id),
+    message: "Availability check failed",
+  }));
+
   const active = availability.filter((item) => item.ok).map((item) => item.provider);
   if (active.length === 0) {
-    const errors: QuotaToastError[] = [];
+    const errors: QuotaToastError[] = [...availabilityErrors];
     let hasExplicitProviderIssues = false;
 
     if (params.surfaceExplicitProviderIssues && !selection.isAutoMode) {
@@ -578,10 +581,11 @@ export async function collectQuotaRenderData(params: {
         }
 
         if (availabilityById.get(provider.id) === false) {
-          errors.push({
-            label: getQuotaProviderDisplayLabel(provider.id),
-            message: "Unavailable (not detected)",
-          });
+          if (!failedAvailability.has(provider.id))
+            errors.push({
+              label: getQuotaProviderDisplayLabel(provider.id),
+              message: "Unavailable (not detected)",
+            });
           hasExplicitProviderIssues = true;
         }
       }
@@ -609,7 +613,7 @@ export async function collectQuotaRenderData(params: {
   const entries = results.flatMap((result) =>
     projectProviderResultToStyle(result, style),
   ) as QuotaToastEntry[];
-  const errors = results.flatMap((result) => result.errors);
+  const errors = [...availabilityErrors, ...results.flatMap((result) => result.errors)];
   const attemptedAny = results.some((result) => result.attempted);
 
   let hasExplicitProviderIssues = false;
@@ -661,10 +665,11 @@ export async function collectQuotaRenderData(params: {
       }
 
       if (availabilityById.get(provider.id) === false) {
-        errors.push({
-          label: getQuotaProviderDisplayLabel(provider.id),
-          message: "Unavailable (not detected)",
-        });
+        if (!failedAvailability.has(provider.id))
+          errors.push({
+            label: getQuotaProviderDisplayLabel(provider.id),
+            message: "Unavailable (not detected)",
+          });
         hasExplicitProviderIssues = true;
       }
     }
@@ -689,12 +694,14 @@ export async function collectQuotaRenderData(params: {
   let allWindowsData: QuotaRenderData | null | undefined;
   let singleWindowData: QuotaRenderData | null | undefined;
   if (params.includeAllWindowsData) {
-    const allWindowsEntries = (style === "allWindows")
+    const allWindowsEntries =
+      style === "allWindows"
         ? entries
-      : results.flatMap((result) =>
+        : (results.flatMap((result) =>
             projectProviderResultToStyle(result, "allWindows"),
-        ) as QuotaToastEntry[];
-    allWindowsData = (allWindowsEntries.length === 0 && errors.length === 0 && !sessionTokens)
+          ) as QuotaToastEntry[]);
+    allWindowsData =
+      allWindowsEntries.length === 0 && errors.length === 0 && !sessionTokens
         ? null
         : { entries: allWindowsEntries, errors: [...errors], sessionTokens };
 

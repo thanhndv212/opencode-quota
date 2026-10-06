@@ -233,7 +233,7 @@ describe("collectQuotaRenderData shared quota state", () => {
     expect(result.active).toEqual([workingProvider]);
     expect(result.data).toEqual({
       entries: [{ name: "[OpenAI] (Pro) 5h", percentRemaining: 75 }],
-      errors: [{ label: "Copilot", message: "Unavailable (not detected)" }],
+      errors: [{ label: "Copilot", message: "Availability check failed" }],
       sessionTokens: undefined,
     });
   });
@@ -263,11 +263,11 @@ describe("collectQuotaRenderData shared quota state", () => {
     expect(result.hasExplicitProviderIssues).toBe(true);
     expect(result.data).toEqual({
       entries: [],
-      errors: [{ label: "Copilot", message: "Unavailable (not detected)" }],
+      errors: [{ label: "Copilot", message: "Availability check failed" }],
     });
   });
 
-  it("still returns null in auto mode when every availability probe fails", async () => {
+  it("surfaces failed availability probes even in auto mode", async () => {
     const failingProvider = {
       id: "copilot",
       isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
@@ -290,7 +290,10 @@ describe("collectQuotaRenderData shared quota state", () => {
     expect(result.availability).toEqual([{ provider: failingProvider, ok: false, error: true }]);
     expect(result.active).toEqual([]);
     expect(result.hasExplicitProviderIssues).toBe(false);
-    expect(result.data).toBeNull();
+    expect(result.data).toEqual({
+      entries: [],
+      errors: [{ label: "Copilot", message: "Availability check failed" }],
+    });
   });
 
   it("waits for current model metadata before probing providers under onlyCurrentModel", async () => {

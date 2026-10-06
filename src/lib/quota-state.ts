@@ -118,6 +118,10 @@ function isQuotaProviderResult(value: unknown): value is QuotaProviderResult {
   return true;
 }
 
+function isErrorOnlyResult(result: QuotaProviderResult): boolean {
+  return result.entries.length === 0 && result.errors.length > 0;
+}
+
 async function getQuotaProviderCachePackageVersion(): Promise<string> {
   return (await getPackageVersion()) ?? QUOTA_PROVIDER_CACHE_PACKAGE_VERSION_FALLBACK;
 }
@@ -139,7 +143,8 @@ function isPersistedQuotaProviderCacheEntry(
     entry.key === key &&
     entry.providerId === providerId &&
     typeof entry.timestamp === "number" &&
-    isQuotaProviderResult(entry.result)
+    isQuotaProviderResult(entry.result) &&
+    !isErrorOnlyResult(entry.result)
   );
 }
 
@@ -297,6 +302,10 @@ export async function fetchQuotaProviderResult(params: {
       await safeRm(getQuotaProviderStateCacheFilePath(provider.id, key));
       return snapshot;
     }
+
+    // Display the current failure, but do not replace or refresh a previous
+    // observation. Cached-only surfaces may still read its original timestamp.
+    if (isErrorOnlyResult(snapshot)) return snapshot;
 
     const entry: PersistedQuotaProviderCacheEntry = {
       version: QUOTA_PROVIDER_CACHE_VERSION,
