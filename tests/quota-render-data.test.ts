@@ -189,11 +189,13 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("treats a thrown availability probe as unavailable instead of rejecting the whole render", async () => {
     const failingProvider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
       fetch: vi.fn(),
     };
     const workingProvider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -241,6 +243,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("surfaces explicit unavailable rows when every availability probe fails", async () => {
     const failingProvider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
       fetch: vi.fn(),
     };
@@ -270,6 +273,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("surfaces failed availability probes even in auto mode", async () => {
     const failingProvider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
       fetch: vi.fn(),
     };
@@ -299,6 +303,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("waits for current model metadata before probing providers under onlyCurrentModel", async () => {
     const provider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(false),
       fetch: vi.fn(),
     };
@@ -335,6 +340,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("uses provider-only session metadata for onlyCurrentModel filtering", async () => {
     const openaiProvider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -344,6 +350,7 @@ describe("collectQuotaRenderData shared quota state", () => {
     };
     const copilotProvider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn(),
     };
@@ -388,6 +395,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("uses currentModel matching when currentProviderID is also present", () => {
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       matchesCurrentModel: vi.fn().mockReturnValue(false),
     };
 
@@ -424,6 +432,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("reuses one canonical provider snapshot across single-window and all-window renders without mutation bleed", async () => {
     const syntheticProvider = {
       id: "synthetic",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -561,6 +570,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("projects Gemini quality tiers as bottleneck-only in single-window and all rows in all-windows", async () => {
     const geminiProvider = {
       id: "google-gemini-cli",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -720,6 +730,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("collects live probes in order, projects them to single-window rows, and bypasses shared cache reuse", async () => {
     const syntheticProvider = {
       id: "synthetic",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -741,6 +752,7 @@ describe("collectQuotaRenderData shared quota state", () => {
     };
     const openaiProvider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -805,6 +817,7 @@ describe("collectQuotaRenderData shared quota state", () => {
   it("keeps legacy style ids and presentation fields working for direct render-data calls", async () => {
     const syntheticProvider = {
       id: "synthetic",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,

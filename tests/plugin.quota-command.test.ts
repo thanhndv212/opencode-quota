@@ -193,6 +193,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
       fetch: vi.fn(),
     };
@@ -230,6 +231,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       matchesCurrentModel: vi.fn().mockReturnValue(false),
       isAvailable: vi.fn(),
       fetch: vi.fn(),
@@ -272,6 +274,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "copilot",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -317,6 +320,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -421,6 +425,7 @@ describe("/quota command behavior", () => {
 
       const provider = {
         id: "openai",
+        cachePolicy: { kind: "account-neutral" as const },
         isAvailable: vi.fn().mockResolvedValue(true),
         fetch: vi
           .fn()
@@ -475,6 +480,7 @@ describe("/quota command behavior", () => {
 
       const provider = {
         id: "openai",
+        cachePolicy: { kind: "account-neutral" as const },
         isAvailable: vi.fn().mockResolvedValue(true),
         fetch: vi
           .fn()
@@ -527,6 +533,7 @@ describe("/quota command behavior", () => {
 
       const provider = {
         id: "openai",
+        cachePolicy: { kind: "account-neutral" as const },
         isAvailable: vi
           .fn()
           .mockRejectedValueOnce(new Error("OpenCode auth not readable yet"))
@@ -580,6 +587,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi
         .fn()
@@ -757,6 +765,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       matchesCurrentModel: vi.fn((model?: string) => model === "openai/gpt-5"),
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
@@ -805,6 +814,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -934,6 +944,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       matchesCurrentModel: vi.fn(() => true),
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockImplementation(async ({ config }: any) => ({
@@ -986,6 +997,7 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "openai",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,

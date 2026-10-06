@@ -15,19 +15,16 @@ import {
   formatDeepSeekBalanceValue,
   hasDeepSeekApiKeyConfigured,
   queryDeepSeekBalance,
+  queryDeepSeekBalanceWithAuth,
 } from "../lib/deepseek.js";
+import { resolveDeepSeekApiKey } from "../lib/deepseek-auth.js";
+import { deriveResolvedAuthIdentity } from "../lib/resolved-auth-identity.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
 import { modelProviderIncludesAny } from "../lib/provider-model-matching.js";
-import {
-  attemptedResult,
-  mapNullableProviderResult,
-} from "./result-helpers.js";
+import { attemptedResult, mapNullableProviderResult } from "./result-helpers.js";
 
 function buildDeepSeekEntries(
-  result: Extract<
-    NonNullable<Awaited<ReturnType<typeof queryDeepSeekBalance>>>,
-    { success: true }
-  >,
+  result: Extract<NonNullable<Awaited<ReturnType<typeof queryDeepSeekBalance>>>, { success: true }>,
 ): QuotaToastEntry[] {
   const entries: QuotaToastEntry[] = [];
 
@@ -60,6 +57,32 @@ function buildDeepSeekEntries(
 
 export const deepseekProvider: QuotaProvider = {
   id: "deepseek",
+
+  cachePolicy: {
+    kind: "resolved-auth",
+    async prepare(ctx) {
+      const resolved = await resolveDeepSeekApiKey();
+      if (!resolved) return null;
+      const identity = await deriveResolvedAuthIdentity({
+        providerId: "deepseek",
+        principal: { kind: "credential", value: resolved.key },
+      });
+      if (!identity) return null;
+      return {
+        identity,
+        fetch: async () =>
+          mapNullableProviderResult(
+            await queryDeepSeekBalanceWithAuth(resolved, {
+              requestTimeoutMs: ctx.config.requestTimeoutMs,
+            }),
+            {
+              errorLabel: "DeepSeek",
+              onSuccess: (result) => attemptedResult(buildDeepSeekEntries(result)),
+            },
+          ),
+      };
+    },
+  },
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     // Check if the deepseek provider exists in opencode config

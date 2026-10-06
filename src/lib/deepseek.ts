@@ -12,6 +12,7 @@ import {
   resolveDeepSeekApiKey,
   hasDeepSeekApiKey,
   type DeepSeekKeySource,
+  type DeepSeekApiKeyResult,
 } from "./deepseek-auth.js";
 
 export type DeepSeekCurrency = "CNY" | "USD";
@@ -41,7 +42,7 @@ const DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance";
 const USER_AGENT = "OpenCode-Quota-Toast/1.0";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
-  CNY: "\u00A5",    // ¥
+  CNY: "\u00A5", // ¥
   USD: "$",
 };
 
@@ -95,10 +96,7 @@ function parseDeepSeekBalance(payload: unknown): DeepSeekBalanceResult {
 async function fetchDeepSeekBalance(
   apiKey: string,
   requestTimeoutMs?: number,
-): Promise<
-  | { success: true; data: DeepSeekBalanceResult }
-  | { success: false; message: string }
-> {
+): Promise<{ success: true; data: DeepSeekBalanceResult } | { success: false; message: string }> {
   try {
     const response = await fetchWithTimeout(
       DEEPSEEK_BALANCE_URL,
@@ -148,12 +146,22 @@ export function formatDeepSeekBalanceValue(balance: {
  *
  * @returns A typed result with success/error state, or null if no API key is configured.
  */
-export async function queryDeepSeekBalance(options: {
-  requestTimeoutMs?: number;
-} = {}): Promise<DeepSeekResult> {
+export async function queryDeepSeekBalance(
+  options: {
+    requestTimeoutMs?: number;
+  } = {},
+): Promise<DeepSeekResult> {
   const resolved = await resolveDeepSeekApiKey();
   if (!resolved) return null;
 
+  return queryDeepSeekBalanceWithAuth(resolved, options);
+}
+
+/** Use an already-selected credential for an account-scoped cache transaction. */
+export async function queryDeepSeekBalanceWithAuth(
+  resolved: DeepSeekApiKeyResult,
+  options: { requestTimeoutMs?: number } = {},
+): Promise<DeepSeekResult> {
   const result = await fetchDeepSeekBalance(resolved.key, options.requestTimeoutMs);
 
   if (!result.success) {
@@ -171,4 +179,5 @@ export {
   getDeepSeekKeyDiagnostics,
   hasDeepSeekApiKey as hasDeepSeekApiKeyConfigured,
   type DeepSeekKeySource,
+  type DeepSeekApiKeyResult,
 } from "./deepseek-auth.js";

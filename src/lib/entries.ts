@@ -1,3 +1,4 @@
+import type { ResolvedAuthIdentity } from "./resolved-auth-identity.js";
 import type { CursorQuotaPlan, OpenCodeGoWindowKey } from "./types.js";
 
 /**
@@ -47,9 +48,7 @@ export type QuotaToastEntry =
       resetTimeIso?: string;
     });
 
-export function isValueEntry(
-  e: QuotaToastEntry,
-): e is Extract<QuotaToastEntry, { kind: "value" }> {
+export function isValueEntry(e: QuotaToastEntry): e is Extract<QuotaToastEntry, { kind: "value" }> {
   return e.kind === "value";
 }
 
@@ -138,6 +137,18 @@ export interface QuotaProviderContext {
   };
 }
 
+export type QuotaProviderCachePolicy =
+  | { kind: "account-neutral" }
+  | { kind: "uncached" }
+  | {
+      kind: "resolved-auth";
+      /** Prepare identity and fetching from the same selected credential snapshot. */
+      prepare: (ctx: QuotaProviderContext) => Promise<{
+        identity: ResolvedAuthIdentity;
+        fetch: () => Promise<QuotaProviderResult>;
+      } | null>;
+    };
+
 export interface QuotaProvider {
   /** Stable id used by config.enabledProviders */
   id: string;
@@ -147,6 +158,9 @@ export interface QuotaProvider {
 
   /** Fetch and normalize quota for this provider */
   fetch: (ctx: QuotaProviderContext) => Promise<QuotaProviderResult>;
+
+  /** Missing policy fails closed as uncached. */
+  cachePolicy?: QuotaProviderCachePolicy;
 
   /** Optional provider match for onlyCurrentModel filtering */
   matchesCurrentModel?: (model: string, context?: QuotaProviderMatchContext) => boolean;
