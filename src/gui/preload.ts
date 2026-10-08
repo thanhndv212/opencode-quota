@@ -14,18 +14,13 @@ import { contextBridge, ipcRenderer } from "electron";
 const quotaApi = {
   // ── Quota ──────────────────────────────────────────────
   quota: {
-    fetch: (bypassCache?: boolean) =>
-      ipcRenderer.invoke("quota:fetch", { bypassCache }),
+    fetch: (bypassCache?: boolean) => ipcRenderer.invoke("quota:fetch", { bypassCache }),
   },
 
   // ── Token Usage ────────────────────────────────────────
   tokens: {
-    query: (params: {
-      window?: string;
-      windowMs?: number;
-      sinceMs?: number;
-      untilMs?: number;
-    }) => ipcRenderer.invoke("tokens:query", params),
+    query: (params: { window?: string; windowMs?: number; sinceMs?: number; untilMs?: number }) =>
+      ipcRenderer.invoke("tokens:query", params),
     projects: () => ipcRenderer.invoke("tokens:projects"),
     syncExport: () => ipcRenderer.invoke("tokens:sync-export"),
     syncExportAndPush: () => ipcRenderer.invoke("tokens:sync-export-and-push"),
@@ -45,8 +40,7 @@ const quotaApi = {
       ipcRenderer.invoke("pricing:delete", { provider, model }),
     refreshSnapshot: () => ipcRenderer.invoke("pricing:refresh"),
     listProviders: () => ipcRenderer.invoke("pricing:listProviders"),
-    listModels: (provider: string) =>
-      ipcRenderer.invoke("pricing:listModels", { provider }),
+    listModels: (provider: string) => ipcRenderer.invoke("pricing:listModels", { provider }),
   },
 
   // ── Budget Alerts ──────────────────────────────────────
@@ -71,37 +65,32 @@ const quotaApi = {
   // ── API Keys ───────────────────────────────────────────
   apikeys: {
     status: () => ipcRenderer.invoke("apikeys:status"),
-    init: (passphrase: string) =>
-      ipcRenderer.invoke("apikeys:init", { passphrase }),
-    unlock: (passphrase: string) =>
-      ipcRenderer.invoke("apikeys:unlock", { passphrase }),
+    init: (passphrase: string) => ipcRenderer.invoke("apikeys:init", { passphrase }),
+    unlock: (passphrase: string) => ipcRenderer.invoke("apikeys:unlock", { passphrase }),
     lock: () => ipcRenderer.invoke("apikeys:lock"),
     isUnlocked: () => ipcRenderer.invoke("apikeys:isUnlocked"),
     list: () => ipcRenderer.invoke("apikeys:list"),
-    get: (providerId: string) =>
-      ipcRenderer.invoke("apikeys:get", { providerId }),
-    getMasked: (providerId: string) =>
-      ipcRenderer.invoke("apikeys:getMasked", { providerId }),
+    get: (providerId: string) => ipcRenderer.invoke("apikeys:get", { providerId }),
+    getMasked: (providerId: string) => ipcRenderer.invoke("apikeys:getMasked", { providerId }),
     save: (providerId: string, apiKey: string, label?: string) =>
       ipcRenderer.invoke("apikeys:save", { providerId, apiKey, label }),
-    delete: (providerId: string) =>
-      ipcRenderer.invoke("apikeys:delete", { providerId }),
+    delete: (providerId: string) => ipcRenderer.invoke("apikeys:delete", { providerId }),
     changePassphrase: (oldPass: string, newPass: string) =>
       ipcRenderer.invoke("apikeys:changePassphrase", {
         oldPassphrase: oldPass,
         newPassphrase: newPass,
       }),
-    export: (sharePassphrase: string) =>
-      ipcRenderer.invoke("apikeys:export", { sharePassphrase }),
+    export: (sharePassphrase: string) => ipcRenderer.invoke("apikeys:export", { sharePassphrase }),
     import: (filePath: string, sharePassphrase: string) =>
       ipcRenderer.invoke("apikeys:import", { filePath, sharePassphrase }),
   },
 
   // ── Config ─────────────────────────────────────────────
   config: {
+    quota: () => ipcRenderer.invoke("config:quota"),
+    reloadQuota: () => ipcRenderer.invoke("config:quota-reload"),
     get: () => ipcRenderer.invoke("config:get"),
-    update: (patch: Record<string, unknown>) =>
-      ipcRenderer.invoke("config:update", { patch }),
+    update: (patch: Record<string, unknown>) => ipcRenderer.invoke("config:update", { patch }),
     reset: () => ipcRenderer.invoke("config:reset"),
   },
 

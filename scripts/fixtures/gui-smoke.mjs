@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { pathToFileURL } from "node:url";
 import { app, BrowserWindow, ipcMain, session } from "electron";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // This is an external fixture harness, never a production-mode bypass. Load
 // the actual installed main/preload/renderer, replacing only data-provider IPC.
@@ -75,6 +77,22 @@ async function smoke() {
       "fixture dashboard",
     );
     assert.equal(await evaluate("typeof window.quotaApi.quota.fetch"), "function");
+    const settings = await evaluate("window.quotaApi.config.quota()");
+    assert.deepEqual(settings.config.enabledProviders, ["cursor"]);
+    assert.equal(settings.config.cursorPlan, "pro");
+    assert.equal(settings.config.requestTimeoutMs, 9000);
+    assert.deepEqual(settings.meta.workspaceConfigPaths, []);
+    assert.equal(settings.meta.globalConfigPaths.length, 1);
+    await writeFile(
+      join(process.env.XDG_CONFIG_HOME, "opencode", "opencode-quota", "quota-toast.json"),
+      JSON.stringify({
+        enabledProviders: ["cursor"],
+        requestTimeoutMs: 12000,
+        pricingSnapshot: { source: "bundled", autoRefresh: 0 },
+      }),
+    );
+    const reloaded = await evaluate("window.quotaApi.config.reloadQuota()");
+    assert.equal(reloaded.config.requestTimeoutMs, 12000);
     assert.equal(
       await evaluate("window.quotaApi.app.getVersion()"),
       process.env.QUOTA_SMOKE_VERSION,

@@ -9,6 +9,8 @@ import { getProviders } from "../../providers/registry.js";
 import type { QuotaToastConfig } from "../../lib/types.js";
 import { getQuotaProviderDisplayLabel } from "../../lib/provider-metadata.js";
 import { DEFAULT_CONFIG } from "../../lib/types.js";
+import { createQuotaProviderRuntimeContext } from "../../lib/quota-runtime-context.js";
+import type { LoadConfigMeta } from "../../lib/config.js";
 
 export interface QuotaFetchResult {
   entries: QuotaToastEntry[];
@@ -19,27 +21,21 @@ export interface QuotaFetchResult {
 function buildMinimalProviderContext(
   config: QuotaToastConfig,
   bypassCache: boolean,
+  configMeta?: LoadConfigMeta,
 ): QuotaProviderContext {
-  return {
+  const context = createQuotaProviderRuntimeContext({
     client: {
       config: {
         providers: async () => ({ data: { providers: [] } }),
         get: async () => ({ data: { model: undefined } }),
       },
     },
-    config: {
-      googleModels: config.googleModels,
-      anthropicBinaryPath: config.anthropicBinaryPath,
-      alibabaCodingPlanTier: config.alibabaCodingPlanTier,
-      cursorPlan: config.cursorPlan,
-      cursorIncludedApiUsd: config.cursorIncludedApiUsd,
-      cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
-      opencodeGoWindows: config.opencodeGoWindows,
-      requestTimeoutMs: config.requestTimeoutMs,
-      enabledProviders: config.enabledProviders,
-      bypassCache,
-    },
-  };
+    config,
+    configMeta,
+    session: {},
+  });
+  context.config.bypassCache = bypassCache;
+  return context;
 }
 
 /**
@@ -49,10 +45,11 @@ function buildMinimalProviderContext(
 export async function fetchAllQuota(
   config: QuotaToastConfig,
   bypassCache = false,
+  configMeta?: LoadConfigMeta,
 ): Promise<QuotaFetchResult> {
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   const providers = getProviders();
-  const ctx = buildMinimalProviderContext(mergedConfig, bypassCache);
+  const ctx = buildMinimalProviderContext(mergedConfig, bypassCache, configMeta);
 
   const entries: QuotaToastEntry[] = [];
   const errors: QuotaToastError[] = [];

@@ -224,6 +224,10 @@ opencode-quota gui
 
 This spawns Electron from your `node_modules` or `PATH`. If Electron isn't found, install it first: `npm install -g electron`.
 
+Standalone quota settings use the same `opencode-quota/quota-toast.json` loader as the plugin. By default, the GUI reads global configuration candidates only; its launch directory does not select a project. To include project settings, run `opencode-quota gui --project-dir /absolute/path/to/project`. An absolute `OPENCODE_CONFIG_DIR` also selects a configuration root. Project settings override global settings, but provider secrets still come from trusted auth, global config, or environment variables.
+
+Settings load at startup and reload when you click Refresh. The preload APIs `quotaApi.config.quota()` and `quotaApi.config.reloadQuota()` expose effective quota settings, their source paths, and validation issues. Malformed sidecars produce configuration errors in the Dashboard and retain validated defaults; they do not activate the legacy config fallback.
+
 On **Linux**, `--no-sandbox` is auto-appended unless you already pass it via `ELECTRON_ARGS`. The GUI main process also enables `--no-sandbox` automatically on Linux. If your system tray is unsupported (e.g. vanilla Gnome, Wayland without AppIndicator), the app falls back to window-only mode.
 
 ### Install as a desktop app

@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { run, withConsumer } from "./lib/package-consumer.mjs";
@@ -23,6 +23,23 @@ await withConsumer(process.argv[2], async (root) => {
   };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.OPENCODE_CONFIG_DIR;
+  const settingsDir = path.join(env.XDG_CONFIG_HOME, "opencode", "opencode-quota");
+  await mkdir(settingsDir, { recursive: true });
+  await writeFile(
+    path.join(settingsDir, "quota-toast.json"),
+    JSON.stringify({
+      enabledProviders: ["cursor"],
+      cursorPlan: "pro",
+      requestTimeoutMs: 9000,
+      pricingSnapshot: { source: "bundled", autoRefresh: 0 },
+    }),
+  );
+  // A launch-directory sidecar must not override global settings.
+  await mkdir(path.join(root, "opencode-quota"));
+  await writeFile(
+    path.join(root, "opencode-quota", "quota-toast.json"),
+    JSON.stringify({ enabledProviders: ["openai"] }),
+  );
   const args = [fileURLToPath(new URL("fixtures/gui-smoke.mjs", import.meta.url))];
   if (process.platform === "linux") args.push("--no-sandbox");
   await run(electron, args, { cwd: root, env, timeout: 45_000 });

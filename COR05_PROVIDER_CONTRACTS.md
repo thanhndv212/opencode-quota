@@ -1,6 +1,6 @@
 # COR-05 provider payload and window contracts
 
-Issue: #12. PR: [#39](https://github.com/thanhndv212/opencode-quota/pull/39). Branch: `fix/cor-05-provider-contracts`. Status: implementation and local validation; hosted CI/merge pending. Reviewed 2026-10-08.
+Issue: #12. PR: [#39](https://github.com/thanhndv212/opencode-quota/pull/39). Branch: `fix/cor-05-provider-contracts`. Status: complete; PR #39 merged at `377c5a3`, with [green main CI 37820466327](https://github.com/thanhndv212/opencode-quota/actions/runs/37820466327). Reviewed 2026-10-09.
 
 ## Provenance and adaptation
 
@@ -35,7 +35,7 @@ Unlike the source's single-quantity fallback, gross-only credit usage leaves inc
 
 ## Local validation
 
-Node 22.23.3 / pnpm 10.0.0: typecheck, 137 Vitest files / 1,437 tests, installed-tarball `build:check`, formatting and `git diff --check` passed. Installed-tarball macOS Electron 42.5.0 startup, six tabs, preload, version and refresh also passed. Provider payloads are fixture-backed. Hosted CI, review, merge and green merged-main CI remain pending.
+Node 22.23.3 / pnpm 10.0.0: typecheck, 137 Vitest files / 1,437 tests, installed-tarball `build:check`, formatting and `git diff --check` passed. Installed-tarball macOS Electron 42.5.0 startup, six tabs, preload, version and refresh also passed. Provider payloads are fixture-backed. PR #39 is merged at `377c5a3`; main CI 37820466327 passed. Live-provider and actual host evidence remain outside this fixture/package gate.
 
 ## Migration and rollback
 
