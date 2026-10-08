@@ -782,6 +782,8 @@ claude auth status
 
 If Claude lives at a custom path, set `anthropicBinaryPath` in `opencode-quota/quota-toast.json`.
 
+If the OAuth usage endpoint returns HTTP 429, probes for the same credential pause for 30 seconds initially, with exponential backoff up to 15 minutes. A valid `Retry-After` value can extend that pause within the same cap. Manual refresh respects the cooldown; local CLI/auth checks still run so account changes and re-authentication remain visible. Cooldowns and pending OAuth requests are scoped to the selected token in memory only; they do not survive an app restart or coordinate separate processes.
+
 </details>
 
 <a id="cursor"></a>

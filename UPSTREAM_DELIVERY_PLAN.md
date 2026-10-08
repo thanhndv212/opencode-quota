@@ -27,7 +27,7 @@ Updated: 2026-10-08. Parent issue: [Upstream adoption delivery](https://github.c
 | FND-04 | [#7](https://github.com/thanhndv212/opencode-quota/issues/7)   | In progress | PR #33: Linux/macOS unsigned candidates built in run 37505462379; draft/tag and npm authentication/registration pending |
 | COR-01 | [#8](https://github.com/thanhndv212/opencode-quota/issues/8)   | Done        | PR #32 merged after six CI checks; whole-response deadline verified on real HTTP fixtures                               |
 | COR-02 | [#9](https://github.com/thanhndv212/opencode-quota/issues/9)   | Done        | PR #35 merged at 3165abf; main CI 37787732500 green; 13 resolved-auth / 7 explicitly uncached providers                 |
-| COR-03 | [#10](https://github.com/thanhndv212/opencode-quota/issues/10) | In progress | PR #34: recovery and availability/desktop regressions pass; 429 cooldown evidence remains                               |
+| COR-03 | [#10](https://github.com/thanhndv212/opencode-quota/issues/10) | In progress | PR #34 delivered recovery; COR-03 cooldown implemented on `fix/cor-03-oauth-cooldown`, local gates pass; PR/CI pending                               |
 | COR-04 | [#11](https://github.com/thanhndv212/opencode-quota/issues/11) | Done        | PR #31 merged after all six CI checks; source/sync/multiplicity fixtures passed                                         |
 | COR-05 | [#12](https://github.com/thanhndv212/opencode-quota/issues/12) | Planned     | Legacy/current payload contracts                                                                                        |
 | GUI-01 | [#13](https://github.com/thanhndv212/opencode-quota/issues/13) | Planned     | Config parity scenarios                                                                                                 |
@@ -59,6 +59,9 @@ Milestones are closed on GitHub and marked Done here only when every required it
 - Installed OpenCode reports 1.18.10; actual host command validation remains unverified.
 
 - COR-02 local rollout (2026-10-08): Node 22.23.3/pnpm 10.0.0 typecheck, 134 Vitest files / 1,336 passing tests, installed-tarball build check, real separate-process A/B cache/restart smoke, and installed-tarball macOS Electron smoke passed. Provider requests in these checks are fixture-backed. Coverage and explicitly uncached providers are documented in `COR02_CACHE_DESIGN.md`; live-provider completion is not claimed. [PR CI 37787317404](https://github.com/thanhndv212/opencode-quota/actions/runs/37787317404) and [main CI 37787732500](https://github.com/thanhndv212/opencode-quota/actions/runs/37787732500) passed all six checks at PR head and merged commit `3165abf`, respectively: quality/process isolation, Node 20/22 installed tarballs, Linux/macOS Electron, and required gate.
+
+
+- COR-03 cooldown local validation (2026-10-08): adapted upstream `c8241fc0e0304cdacf9b21f4d8d3369055b57621` with process-keyed HMAC token scopes, A/B/A cooldown retention, and OAuth-only request coalescing. Forced refresh respects bounded Retry-After/exponential backoff; fresh local CLI/auth probes remain uncached. Node 22.23.3/pnpm 10.0.0 typecheck, 134 Vitest files / 1,356 tests, installed-tarball build check, and installed-tarball macOS Electron smoke passed. Provider behavior is fixture-backed. Cooldowns are process-local and do not survive restart or coordinate separate processes; no config/storage migration. PR and hosted CI remain pending.
 
 ## 1. Outcome and approach
 

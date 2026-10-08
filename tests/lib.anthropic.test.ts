@@ -697,7 +697,7 @@ describe("Claude CLI diagnostics", () => {
     const quota = await queryAnthropicQuota();
     expect(quota?.success).toBe(false);
     if (quota && !quota.success) {
-      expect(quota.error).toContain("Anthropic API error 429: rate limited");
+      expect(quota.error).toContain("Anthropic OAuth usage probe paused after HTTP 429");
       expect(quota.error).not.toContain("\u001b");
     }
   });
@@ -995,5 +995,227 @@ describe("Claude CLI diagnostics", () => {
       expect(result.error).toContain("probe boom");
       expect(result.error).not.toContain("\u001b");
     }
+  });
+});
+
+describe("Anthropic OAuth rate-limit recovery", () => {
+  const startMs = Date.parse("2026-10-08T10:00:00Z");
+  const usage = { five_hour: { utilization: 10 }, seven_day: { utilization: 20 } };
+
+  function prepareOAuth(token = "account-a-token"): void {
+    setProcessPlatform("linux");
+    vi.useFakeTimers();
+    vi.setSystemTime(startMs);
+    execFileMock.mockImplementation((_file, args, _options, callback) => {
+      callback(null, args?.includes("--version") ? "claude 1.2.3" : '{"authenticated":true}', "");
+      return {} as never;
+    });
+    readFileMock.mockResolvedValue(JSON.stringify({ claudeAiOauth: { accessToken: token } }));
+  }
+
+  function rateLimited(retryAfter?: string, body = "rate limited"): Response {
+    return new Response(body, {
+      status: 429,
+      headers: retryAfter === undefined ? undefined : { "Retry-After": retryAfter },
+    });
+  }
+
+  it.each([
+    [undefined, 30_000],
+    ["90", 90_000],
+    ["Thu, 08 Oct 2026 10:02:00 GMT", 120_000],
+    ["invalid", 30_000],
+    ["0", 30_000],
+    ["-5", 30_000],
+    ["Thu, 08 Oct 2026 09:00:00 GMT", 30_000],
+    ["999999", 900_000],
+  ])("honors bounded Retry-After %s even on forced refresh", async (header, delayMs) => {
+    prepareOAuth();
+    fetchWithTimeoutMock
+      .mockResolvedValueOnce(rateLimited(header))
+      .mockResolvedValueOnce(mockJsonResponse(usage));
+    expect(await queryAnthropicQuota()).toMatchObject({ success: false });
+    vi.setSystemTime(startMs + delayMs - 1);
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({
+      success: false,
+      error: expect.stringContaining("retry in 1s"),
+    });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+    vi.setSystemTime(startMs + delayMs);
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({ success: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("backs off repeated 429s and resets after a successful request", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock
+      .mockResolvedValueOnce(rateLimited())
+      .mockResolvedValueOnce(rateLimited())
+      .mockResolvedValueOnce(mockJsonResponse(usage))
+      .mockResolvedValueOnce(rateLimited());
+    await queryAnthropicQuota();
+    vi.setSystemTime(startMs + 30_000);
+    expect(await queryAnthropicQuota()).toMatchObject({
+      error: expect.stringContaining("retry in 60s"),
+    });
+    vi.setSystemTime(startMs + 89_999);
+    await queryAnthropicQuota({ bypassCache: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+    vi.setSystemTime(startMs + 90_000);
+    expect(await queryAnthropicQuota()).toMatchObject({ success: true });
+    expect(await queryAnthropicQuota()).toMatchObject({
+      error: expect.stringContaining("retry in 30s"),
+    });
+  });
+
+  it("keeps account A's cooldown across an A/B/A switch without blocking B", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock
+      .mockResolvedValueOnce(rateLimited())
+      .mockResolvedValueOnce(mockJsonResponse(usage));
+    await queryAnthropicQuota();
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "account-b-token" } }),
+    );
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({ success: true });
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "account-a-token" } }),
+    );
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({
+      success: false,
+      error: expect.stringContaining("HTTP 429"),
+    });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("coalesces concurrent OAuth probes including forced refreshes", async () => {
+    prepareOAuth();
+    let resolveRequest!: (response: Response) => void;
+    fetchWithTimeoutMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    const first = queryAnthropicQuota();
+    const second = queryAnthropicQuota({ bypassCache: true });
+    await vi.waitFor(() => expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1));
+    resolveRequest(rateLimited());
+    const results = await Promise.all([first, second]);
+    expect(results).toEqual([
+      expect.objectContaining({ success: false }),
+      expect.objectContaining({ success: false }),
+    ]);
+    await queryAnthropicQuota({ bypassCache: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache 401 errors or prevent re-authentication and refresh", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock
+      .mockResolvedValueOnce(new Response("expired", { status: 401 }))
+      .mockResolvedValueOnce(mockJsonResponse(usage));
+    expect(await queryAnthropicQuota()).toMatchObject({
+      success: false,
+      error: expect.stringContaining("401"),
+    });
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({ success: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([429, 401, "network"])("redacts credentials from %s diagnostics", async (failure) => {
+    prepareOAuth();
+    if (failure === "network") {
+      fetchWithTimeoutMock.mockRejectedValue(new Error("request failed: account-a-token"));
+    } else {
+      fetchWithTimeoutMock.mockResolvedValue(
+        new Response("Bearer account-a-token", { status: failure }),
+      );
+    }
+    const result = await queryAnthropicQuota();
+    expect(result).toMatchObject({ success: false });
+    expect(JSON.stringify(result)).not.toContain("account-a-token");
+    expect(JSON.stringify(result)).toContain("[redacted]");
+  });
+
+  it("caps repeated 429 backoff at fifteen minutes", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock.mockImplementation(async () => rateLimited());
+    let nowMs = startMs;
+    for (const seconds of [30, 60, 120, 240, 480, 900, 900]) {
+      expect(await queryAnthropicQuota()).toMatchObject({
+        error: expect.stringContaining(`retry in ${seconds}s`),
+      });
+      nowMs += seconds * 1_000;
+      vi.setSystemTime(nowMs);
+    }
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(7);
+  });
+
+  it("retains cooldown when the 429 response body cannot be read", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock.mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "Retry-After": "60" }),
+      text: vi.fn().mockRejectedValue(new Error("body timeout")),
+    } as unknown as Response);
+    await queryAnthropicQuota();
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({
+      error: expect.stringContaining("retry in 60s"),
+    });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not share pending OAuth responses across accounts", async () => {
+    prepareOAuth();
+    let resolveA!: (response: Response) => void;
+    fetchWithTimeoutMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveA = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(
+        mockJsonResponse({
+          five_hour: { utilization: 70 },
+          seven_day: { utilization: 80 },
+        }),
+      );
+    const pendingA = queryAnthropicQuota();
+    await vi.waitFor(() => expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1));
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: "account-b-token" } }),
+    );
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({
+      success: true,
+      five_hour: { percentRemaining: 30 },
+    });
+    resolveA(rateLimited());
+    expect(await pendingA).toMatchObject({ success: false });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows fresh CLI quota during an OAuth cooldown", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock.mockResolvedValue(rateLimited());
+    await queryAnthropicQuota();
+    mockExecSequence([
+      { stdout: "claude 1.2.3" },
+      { stdout: JSON.stringify({ authenticated: true, quota: usage }) },
+    ]);
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({ success: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases pending request state after a network failure", async () => {
+    prepareOAuth();
+    fetchWithTimeoutMock
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(mockJsonResponse(usage));
+    expect(await queryAnthropicQuota()).toMatchObject({ success: false });
+    expect(await queryAnthropicQuota({ bypassCache: true })).toMatchObject({ success: true });
+    expect(fetchWithTimeoutMock).toHaveBeenCalledTimes(2);
   });
 });
