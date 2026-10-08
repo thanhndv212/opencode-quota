@@ -17,10 +17,7 @@ export type GeminiCliAuthSourceKey =
   | "opencode-gemini-auth"
   | "gemini"
   | "google";
-export type GoogleAgyAuthSourceKey =
-  | "google-agy"
-  | "opencode-agy-auth"
-  | "google-agy-auth";
+export type GoogleAgyAuthSourceKey = "google-agy" | "opencode-agy-auth" | "google-agy-auth";
 export type CursorQuotaPlan = "none" | "pro" | "pro-plus" | "ultra";
 export type PricingSnapshotSource = "auto" | "bundled" | "runtime";
 export type PercentDisplayMode = "remaining" | "used";
@@ -230,6 +227,8 @@ export const DEFAULT_CONFIG: QuotaToastConfig = {
 
 /** GitHub Copilot authentication data */
 export interface CopilotAuthData {
+  /** Validated GitHub Enterprise Cloud hostname for the selected credential. */
+  enterpriseUrl?: string;
   type: string;
   refresh?: string;
   access?: string;
@@ -315,7 +314,9 @@ export interface MiniMaxAuthData {
  * Copilot subscription tier.
  * See: https://docs.github.com/en/copilot/about-github-copilot/subscription-plans-for-github-copilot
  */
-export type CopilotTier = "free" | "pro" | "pro+" | "business" | "enterprise";
+export type CopilotTier = "free" | "student" | "pro" | "pro+" | "max" | "business" | "enterprise";
+
+export type CopilotBillingModel = "ai_credits" | "legacy_premium_requests";
 
 /**
  * Copilot quota token configuration.
@@ -325,32 +326,36 @@ export type CopilotTier = "free" | "pro" | "pro+" | "business" | "enterprise";
  *   `.../opencode/copilot-quota-token.json`
  *   (for example `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`)
  *
- * Users can create a fine-grained PAT with "Plan" read permission
- * to enable quota checking via GitHub's public billing API.
+ * Credential type and permission depend on whether GitHub bills the
+ * personal account, organization, or enterprise.
  */
 export interface CopilotQuotaConfig {
-  /** Fine-grained PAT with GitHub billing-report access */
+  /** GitHub token with the billing-report permission required by the selected scope. */
   token: string;
+  /** Current AI Credits by default; legacy PRUs are limited to eligible Pro/Pro+ annual plans. */
+  billingModel?: CopilotBillingModel;
   /** Optional user login override for user-scoped reports or org user filtering */
   username?: string;
   /**
    * Optional organization slug.
    *
    * In business mode, this selects
-   * `/organizations/{org}/settings/billing/premium_request/usage`.
+   * `/organizations/{org}/settings/billing/ai_credit/usage`.
    *
    * In enterprise mode with an explicit `enterprise` slug, this becomes the
    * optional `organization` query filter on the enterprise usage report.
    */
   organization?: string;
   /**
-   * Optional enterprise slug for enterprise-scoped premium request reports.
+   * Optional enterprise slug for enterprise-scoped AI Credit reports.
    *
    * When present, the plugin queries
-   * `/enterprises/{enterprise}/settings/billing/premium_request/usage`.
+   * `/enterprises/{enterprise}/settings/billing/ai_credit/usage`.
    */
   enterprise?: string;
-  /** Copilot subscription tier (used for personal-tier fallback quota math) */
+  /** Optional GitHub Enterprise Cloud hostname or host-only HTTPS URL for this token. */
+  enterpriseUrl?: string;
+  /** Copilot subscription tier and billing scope. */
   tier: CopilotTier;
 }
 
@@ -532,18 +537,49 @@ export interface ZaiQuotaResult {
 // Quota Result Types
 // =============================================================================
 
-/** Result from fetching per-user Copilot quota */
+export type CopilotResultAuthority = "provider_reported" | "locally_derived";
+
+export interface CopilotBudgetResult {
+  amountUsd: number;
+  spentUsd?: number;
+  scope: string;
+  percentRemaining?: number;
+  authority: CopilotResultAuthority;
+}
+
+/** Result from fetching per-user Copilot accounting. */
 export interface CopilotQuotaResult {
   success: true;
   mode: "user_quota";
+  unit: "ai_credits" | "premium_interactions" | "premium_requests";
   used: number;
-  total: number;
-  percentRemaining: number;
+  authority: CopilotResultAuthority;
+  period?: {
+    year: number;
+    month: number;
+  };
+  total?: number;
+  percentRemaining?: number;
+  includedUsed?: number;
+  billedUsed?: number;
+  billedAmountUsd?: number;
+  budget?: CopilotBudgetResult;
+  plan?: string;
   unlimited?: boolean;
+  warnings?: string[];
   resetTimeIso?: string;
 }
 
-/** Result from fetching organization-scoped Copilot premium usage */
+/** Plan-only result when Copilot returns token-billing placeholder quota data. */
+export interface CopilotPlanResult {
+  success: true;
+  mode: "user_plan";
+  authority: CopilotResultAuthority;
+  plan?: string;
+  resetTimeIso?: string;
+}
+
+/** Result from fetching organization-scoped Copilot AI Credit usage. */
 export interface CopilotOrganizationUsageResult {
   success: true;
   mode: "organization_usage";
@@ -553,11 +589,18 @@ export interface CopilotOrganizationUsageResult {
     year: number;
     month: number;
   };
+  unit: "ai_credits";
   used: number;
+  authority: CopilotResultAuthority;
+  includedUsed?: number;
+  billedUsed?: number;
+  billedAmountUsd?: number;
+  budget?: CopilotBudgetResult;
+  warnings?: string[];
   resetTimeIso?: string;
 }
 
-/** Result from fetching enterprise-scoped Copilot premium usage */
+/** Result from fetching enterprise-scoped Copilot AI Credit usage. */
 export interface CopilotEnterpriseUsageResult {
   success: true;
   mode: "enterprise_usage";
@@ -568,7 +611,14 @@ export interface CopilotEnterpriseUsageResult {
     year: number;
     month: number;
   };
+  unit: "ai_credits";
   used: number;
+  authority: CopilotResultAuthority;
+  includedUsed?: number;
+  billedUsed?: number;
+  billedAmountUsd?: number;
+  budget?: CopilotBudgetResult;
+  warnings?: string[];
   resetTimeIso?: string;
 }
 
@@ -640,6 +690,7 @@ export interface QuotaError {
 /** Combined quota result */
 export type CopilotResult =
   | CopilotQuotaResult
+  | CopilotPlanResult
   | CopilotOrganizationUsageResult
   | CopilotEnterpriseUsageResult
   | QuotaError
@@ -756,17 +807,20 @@ export const GOOGLE_MODEL_KEYS: Record<
 > = {
   G3PRO: {
     key: "gemini-3.1-pro",
-    altKey: "gemini-3.1-pro-high|gemini-3.1-pro-low|gemini-3-pro-high|gemini-3-pro-low|gemini-3.5-pro-high|gemini-3.5-pro-low",
+    altKey:
+      "gemini-3.1-pro-high|gemini-3.1-pro-low|gemini-3-pro-high|gemini-3-pro-low|gemini-3.5-pro-high|gemini-3.5-pro-low",
     display: "G3Pro",
   },
   G3FLASH: {
     key: "gemini-3-flash",
-    altKey: "gemini-3-flash-medium|gemini-3-flash-high|gemini-3-flash-low|gemini-3-5-flash-medium|gemini-3-5-flash-high|gemini-3-5-flash-low|gemini-3.5-flash-medium|gemini-3.5-flash-high|gemini-3.5-flash-low",
+    altKey:
+      "gemini-3-flash-medium|gemini-3-flash-high|gemini-3-flash-low|gemini-3-5-flash-medium|gemini-3-5-flash-high|gemini-3-5-flash-low|gemini-3.5-flash-medium|gemini-3.5-flash-high|gemini-3.5-flash-low",
     display: "G3Flash",
   },
   CLAUDE: {
     key: "claude-opus-4-6-thinking",
-    altKey: "claude-opus-4-5-thinking|claude-opus-4-5|claude-sonnet-4-6|claude-sonnet-4-6-thinking|claude-opus-4-6|gemini-claude-sonnet-4-6|gemini-claude-opus-4-6-thinking",
+    altKey:
+      "claude-opus-4-5-thinking|claude-opus-4-5|claude-sonnet-4-6|claude-sonnet-4-6-thinking|claude-opus-4-6|gemini-claude-sonnet-4-6|gemini-claude-opus-4-6-thinking",
     display: "Claude",
   },
   G3IMAGE: { key: "gemini-3-pro-image", display: "G3Image" },

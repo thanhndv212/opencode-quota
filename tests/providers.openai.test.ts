@@ -40,6 +40,7 @@ describe("openai provider", () => {
       windows: {
         hourly: { percentRemaining: 42, resetTimeIso: "2026-01-01T00:00:00.000Z" },
         weekly: { percentRemaining: 80, resetTimeIso: "2026-01-07T00:00:00.000Z" },
+        monthly: { percentRemaining: 67, resetTimeIso: "2026-02-01T00:00:00.000Z" },
       },
     });
 
@@ -59,6 +60,13 @@ describe("openai provider", () => {
         label: "Weekly:",
         percentRemaining: 80,
         resetTimeIso: "2026-01-07T00:00:00.000Z",
+      },
+      {
+        name: "OpenAI (Pro) Monthly",
+        group: "OpenAI (Pro)",
+        label: "Monthly:",
+        percentRemaining: 67,
+        resetTimeIso: "2026-02-01T00:00:00.000Z",
       },
     ]);
     expect(out.presentation).toEqual({

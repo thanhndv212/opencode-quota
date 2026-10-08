@@ -37,7 +37,7 @@ describe("copilot provider", () => {
     expectAttemptedWithNoErrors(out);
     expect(out.entries).toEqual([
       {
-        name: "Copilot",
+        name: "Copilot Premium Requests",
         group: "Copilot (personal)",
         label: "Quota:",
         right: "42/300",
@@ -65,7 +65,7 @@ describe("copilot provider", () => {
     expect(out.entries).toEqual([
       {
         kind: "value",
-        name: "Copilot",
+        name: "Copilot Premium Requests",
         group: "Copilot (personal)",
         label: "Quota:",
         value: "Unlimited",
@@ -95,10 +95,10 @@ describe("copilot provider", () => {
     expect(out.entries).toEqual([
       {
         kind: "value",
-        name: "Copilot",
+        name: "Copilot AI Credits",
         group: "Copilot (business)",
-        label: "Usage:",
-        value: "9 used | 2026-01 | org=acme-corp | user=alice",
+        label: "Credits:",
+        value: "Used 9 | 2026-01 | org=acme-corp | user=alice",
         resetTimeIso: "2026-02-01T00:00:00.000Z",
       },
     ]);
@@ -127,10 +127,10 @@ describe("copilot provider", () => {
     expect(out.entries).toEqual([
       {
         kind: "value",
-        name: "Copilot",
+        name: "Copilot AI Credits",
         group: "Copilot (business)",
-        label: "Usage:",
-        value: "19 used | 2026-01 | enterprise=acme-enterprise | org=acme-corp",
+        label: "Credits:",
+        value: "Used 19 | 2026-01 | enterprise=acme-enterprise | org=acme-corp",
         resetTimeIso: "2026-02-01T00:00:00.000Z",
       },
     ]);
@@ -160,7 +160,9 @@ describe("copilot provider", () => {
       ),
     ).resolves.toBe(true);
     await expect(
-      copilotProvider.isAvailable(createProviderAvailabilityContext({ providerIds: ["copilot-chat"] })),
+      copilotProvider.isAvailable(
+        createProviderAvailabilityContext({ providerIds: ["copilot-chat"] }),
+      ),
     ).resolves.toBe(true);
     await expect(
       copilotProvider.isAvailable(
@@ -185,5 +187,78 @@ describe("copilot provider", () => {
     const ctx = createProviderAvailabilityContext({ providersError: new Error("boom") });
 
     await expect(copilotProvider.isAvailable(ctx)).resolves.toBe(false);
+  });
+
+  it("shows usage-only AI credits without inventing a denominator", async () => {
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+    vi.mocked(queryCopilotQuota).mockResolvedValueOnce({
+      success: true,
+      mode: "user_quota",
+      unit: "ai_credits",
+      authority: "provider_reported",
+      used: 100,
+      includedUsed: 80,
+      billedUsed: 20,
+      billedAmountUsd: 0.2,
+    });
+    const out = await copilotProvider.fetch({} as any);
+    expect(out.entries).toEqual([
+      {
+        kind: "value",
+        name: "Copilot AI Credits",
+        group: "Copilot (personal)",
+        label: "Credits:",
+        value: "Used 100 | Included 80 | Billed 20 ($0.20)",
+        resetTimeIso: undefined,
+      },
+    ]);
+  });
+
+  it("shows reported over-limit credits without clamping usage or inventing availability", async () => {
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+    vi.mocked(queryCopilotQuota).mockResolvedValueOnce({
+      success: true,
+      mode: "user_quota",
+      unit: "ai_credits",
+      authority: "provider_reported",
+      used: 1250,
+      total: 1000,
+      percentRemaining: 0,
+    });
+    const out = await copilotProvider.fetch({} as any);
+    expect(out.entries[0]).toMatchObject({
+      name: "Copilot AI Credits",
+      label: "Credits:",
+      right: "1,250/1,000",
+      percentRemaining: 0,
+    });
+  });
+
+  it("renders placeholder quota as plan-only and preserves a failed budget as a warning", async () => {
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+    vi.mocked(queryCopilotQuota).mockResolvedValueOnce({
+      success: true,
+      mode: "user_plan",
+      plan: "business",
+      authority: "provider_reported",
+    });
+    expect((await copilotProvider.fetch({} as any)).entries[0]).toMatchObject({
+      kind: "value",
+      label: "Plan:",
+      value: "business | quota details unavailable",
+    });
+    vi.mocked(queryCopilotQuota).mockResolvedValueOnce({
+      success: true,
+      mode: "organization_usage",
+      organization: "fixture-org",
+      period: { year: 2026, month: 10 },
+      unit: "ai_credits",
+      authority: "provider_reported",
+      used: 100,
+      warnings: ["Budget report permission denied"],
+    });
+    const out = await copilotProvider.fetch({} as any);
+    expect(out.entries[0]).toMatchObject({ kind: "value", name: "Copilot AI Credits" });
+    expect(out.errors).toEqual([{ label: "Copilot", message: "Budget report permission denied" }]);
   });
 });

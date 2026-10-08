@@ -11,22 +11,15 @@ import { fetchWithTimeout } from "./http.js";
 import { readAuthFileCached } from "./opencode-auth.js";
 import { clampPercent } from "./format-utils.js";
 
-interface RateLimitWindow {
-  used_percent: number;
-  limit_window_seconds: number;
-  reset_after_seconds: number;
-  reset_at?: number;
-}
-
 interface OpenAIUsageResponse {
   plan_type: string;
   rate_limit: {
     limit_reached: boolean;
-    primary_window: RateLimitWindow;
-    secondary_window: RateLimitWindow | null;
+    primary_window?: unknown;
+    secondary_window?: unknown;
   } | null;
   code_review_rate_limit?: {
-    primary_window: RateLimitWindow | null;
+    primary_window?: unknown;
   } | null;
   credits?: {
     has_credits: boolean;
@@ -69,26 +62,78 @@ function getAccountIdFromJwt(token: string): string | null {
   return parseJwt(token)?.["https://api.openai.com/auth"]?.chatgpt_account_id ?? null;
 }
 
-function remainingPercent(window: RateLimitWindow): number {
-  return clampPercent(100 - window.used_percent);
+// Adapted-From: 3e845de9e7390d1c6d77e66f0ab2f45fc5615702
+type OpenAIWindowKind = "hourly" | "weekly" | "monthly";
+
+type OpenAIWindowValue = {
+  percentRemaining: number;
+  resetTimeIso?: string;
+};
+
+const WINDOW_KIND_BY_DURATION: Readonly<Record<number, OpenAIWindowKind>> = {
+  18_000: "hourly",
+  604_800: "weekly",
+  2_628_000: "monthly",
+};
+
+function isoFromMilliseconds(milliseconds: number): string | undefined {
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return undefined;
+
+  const date = new Date(milliseconds);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
-function resetIsoFromNowSeconds(seconds: number): string | undefined {
-  if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
-  return new Date(Date.now() + Math.round(seconds * 1000)).toISOString();
+function resetIsoFromNowSeconds(seconds: unknown): string | undefined {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
+    return undefined;
+  }
+  return isoFromMilliseconds(Date.now() + Math.round(seconds * 1000));
 }
 
-function resetIsoFromResetAt(resetAt?: number): string | undefined {
-  if (!Number.isFinite(resetAt) || !resetAt) return undefined;
-  const ms = Math.round(resetAt * 1000);
-  if (!Number.isFinite(ms) || ms <= 0) return undefined;
-  return new Date(ms).toISOString();
+function resetIsoFromResetAt(resetAt: unknown): string | undefined {
+  if (typeof resetAt !== "number" || !Number.isFinite(resetAt) || resetAt <= 0) {
+    return undefined;
+  }
+  return isoFromMilliseconds(Math.round(resetAt * 1000));
+}
+
+function parseWindowValue(window: unknown): OpenAIWindowValue | null {
+  if (!window || typeof window !== "object") return null;
+
+  const value = window as Record<string, unknown>;
+  if (typeof value.used_percent !== "number" || !Number.isFinite(value.used_percent)) {
+    return null;
+  }
+
+  return {
+    percentRemaining: clampPercent(100 - value.used_percent),
+    resetTimeIso:
+      resetIsoFromResetAt(value.reset_at) ?? resetIsoFromNowSeconds(value.reset_after_seconds),
+  };
+}
+
+function parseRateLimitWindow(
+  window: unknown,
+): { kind: OpenAIWindowKind; value: OpenAIWindowValue } | null {
+  if (!window || typeof window !== "object") return null;
+
+  const raw = window as Record<string, unknown>;
+  if (typeof raw.limit_window_seconds !== "number" || !Number.isFinite(raw.limit_window_seconds)) {
+    return null;
+  }
+
+  const kind = WINDOW_KIND_BY_DURATION[raw.limit_window_seconds];
+  if (!kind) return null;
+
+  const value = parseWindowValue(window);
+  return value ? { kind, value } : null;
 }
 
 function derivePlanLabel(planType: string | undefined): string {
-  const raw = (planType ?? "").toLowerCase();
-  if (raw.includes("pro")) return "OpenAI (Pro)";
-  if (raw.includes("plus")) return "OpenAI (Plus)";
+  const normalized = (planType ?? "").trim().toLowerCase();
+  if (normalized === "team" || normalized === "business") return "OpenAI (Business)";
+  if (normalized.includes("pro")) return "OpenAI (Pro)";
+  if (normalized.includes("plus")) return "OpenAI (Plus)";
   if (planType) return `OpenAI (${planType})`;
   return "OpenAI";
 }
@@ -106,7 +151,8 @@ export type OpenAIResult =
       email?: string;
       windows: {
         hourly?: { percentRemaining: number; resetTimeIso?: string };
-        weekly?: { percentRemaining: number; resetTimeIso?: string };
+        weekly?: OpenAIWindowValue;
+        monthly?: OpenAIWindowValue;
         codeReview?: { percentRemaining: number; resetTimeIso?: string };
       };
       credits?: {
@@ -225,46 +271,43 @@ export async function queryOpenAIQuotaWithAuth(
     }
 
     const data = (await resp.json()) as OpenAIUsageResponse;
-    const primary = data.rate_limit?.primary_window;
-    const secondary = data.rate_limit?.secondary_window ?? null;
-    const codeReview = data.code_review_rate_limit?.primary_window ?? null;
+    const primary = parseRateLimitWindow(data.rate_limit?.primary_window);
+    const secondary = parseRateLimitWindow(data.rate_limit?.secondary_window);
+    const codeReview = parseWindowValue(data.code_review_rate_limit?.primary_window);
     const credits = data.credits ?? null;
+    const windows: {
+      hourly?: OpenAIWindowValue;
+      weekly?: OpenAIWindowValue;
+      monthly?: OpenAIWindowValue;
+      codeReview?: OpenAIWindowValue;
+    } = {};
 
-    if (!primary) return { success: false, error: "No quota data" };
+    const conflictingKinds = new Set<OpenAIWindowKind>();
+    for (const parsed of [primary, secondary]) {
+      if (!parsed || conflictingKinds.has(parsed.kind)) continue;
 
-    const hourlyRemain = remainingPercent(primary);
-    const weeklyRemain = secondary ? remainingPercent(secondary) : undefined;
-    const codeReviewRemain = codeReview ? remainingPercent(codeReview) : undefined;
+      const existing = windows[parsed.kind];
+      if (!existing) {
+        windows[parsed.kind] = parsed.value;
+      } else if (
+        existing.percentRemaining !== parsed.value.percentRemaining ||
+        existing.resetTimeIso !== parsed.value.resetTimeIso
+      ) {
+        delete windows[parsed.kind];
+        conflictingKinds.add(parsed.kind);
+      }
+    }
+    if (codeReview) windows.codeReview = codeReview;
 
-    const hourlyResetIso =
-      resetIsoFromResetAt(primary.reset_at) ?? resetIsoFromNowSeconds(primary.reset_after_seconds);
-    const weeklyResetIso = secondary
-      ? (resetIsoFromResetAt(secondary.reset_at) ??
-        resetIsoFromNowSeconds(secondary.reset_after_seconds))
-      : undefined;
-    const codeReviewResetIso = codeReview
-      ? (resetIsoFromResetAt(codeReview.reset_at) ??
-        resetIsoFromNowSeconds(codeReview.reset_after_seconds))
-      : undefined;
+    if (Object.keys(windows).length === 0) {
+      return { success: false, error: "No quota data" };
+    }
 
     return {
       success: true,
       label: derivePlanLabel(data.plan_type),
       email: resolvedAuth.email,
-      windows: {
-        hourly: { percentRemaining: clampPercent(hourlyRemain), resetTimeIso: hourlyResetIso },
-        weekly:
-          weeklyRemain === undefined
-            ? undefined
-            : { percentRemaining: clampPercent(weeklyRemain), resetTimeIso: weeklyResetIso },
-        codeReview:
-          codeReviewRemain === undefined
-            ? undefined
-            : {
-                percentRemaining: clampPercent(codeReviewRemain),
-                resetTimeIso: codeReviewResetIso,
-              },
-      },
+      windows,
       credits: credits
         ? {
             hasCredits: Boolean(credits.has_credits),
