@@ -15,8 +15,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
 
-import type { QuotaToastConfig } from "../lib/types.js";
-import { DEFAULT_CONFIG } from "../lib/types.js";
+import {
+  getStandaloneProjectRoot,
+  loadStandaloneQuotaConfig,
+  type StandaloneQuotaConfig,
+} from "./quota-config.js";
 import {
   getGuiConfig,
   updateGuiConfig,
@@ -139,25 +142,36 @@ function createTrayIcon(): Electron.NativeImage {
 }
 
 // =============================================================================
-// Configuration loading
-// =============================================================================
-
-async function loadQuotaConfig(): Promise<QuotaToastConfig> {
-  // In a real scenario, load from the same config files as the plugin
-  // For the GUI standalone mode, we use defaults + potentially a separate config
-  return { ...DEFAULT_CONFIG };
-}
-
-// =============================================================================
 // IPC handler registration
 // =============================================================================
 
-function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
+function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
+  let quotaConfig = initialConfig;
+  async function reloadQuotaConfig() {
+    quotaConfig = await loadStandaloneQuotaConfig(initialConfig.projectRoot);
+    return quotaConfig;
+  }
   // ── Quota ──────────────────────────────────────────
   ipcMain.handle("quota:fetch", async (_event, params: { bypassCache?: boolean }) => {
     try {
-      const result = await quotaIpc.fetchAllQuota(config, params?.bypassCache);
-      return result;
+      // Manual refresh is also an explicit settings reload. Automatic refresh
+      // uses the last loaded snapshot until GUI-02 owns the refresh controller.
+      const effective = params?.bypassCache ? await reloadQuotaConfig() : quotaConfig;
+      const result = await quotaIpc.fetchAllQuota(
+        effective.config,
+        params?.bypassCache,
+        effective.meta,
+      );
+      return {
+        ...result,
+        errors: [
+          ...result.errors,
+          ...effective.meta.configIssues.map((issue) => ({
+            label: "Configuration",
+            message: `${issue.path}: ${issue.key}: ${issue.message}`,
+          })),
+        ],
+      };
     } catch (err) {
       return {
         entries: [],
@@ -320,6 +334,8 @@ function registerIpcHandlers(config: QuotaToastConfig, guiConfig: GuiConfig) {
   );
 
   // ── Config ─────────────────────────────────────────
+  ipcMain.handle("config:quota", () => quotaConfig);
+  ipcMain.handle("config:quota-reload", reloadQuotaConfig);
   ipcMain.handle("config:get", async () => getGuiConfig());
   ipcMain.handle("config:update", async (_e, p: { patch: Record<string, unknown> }) =>
     updateGuiConfig(p.patch as Partial<GuiConfig>),
@@ -482,14 +498,15 @@ app
 
     // Load configuration
     const guiConfig = await getGuiConfig();
-    const quotaConfig = await loadQuotaConfig();
+    const projectRoot = await getStandaloneProjectRoot(process.argv.slice(1));
+    const quotaConfig = await loadStandaloneQuotaConfig(projectRoot);
 
     // Preload caches
     await preloadUserPricing();
     await preloadBudgetAlerts();
 
     // Register IPC handlers
-    registerIpcHandlers(quotaConfig, guiConfig);
+    registerIpcHandlers(quotaConfig);
 
     // Create tray icon (with fallback when system tray is unsupported)
     const icon = createTrayIcon();

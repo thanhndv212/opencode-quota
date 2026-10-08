@@ -158,7 +158,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       electronArgs.push("--no-sandbox");
     }
 
-    const spawnArgs = [...electronArgs, guiMainPath];
+    const spawnArgs = [...electronArgs, guiMainPath, ...rest];
 
     console.log("Launching OpenCode Quota GUI...");
     console.log(`  Electron: ${electronCmd}`);

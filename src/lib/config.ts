@@ -90,6 +90,8 @@ export interface LoadConfigMeta {
 }
 
 export interface LoadConfigOptions {
+  /** Standalone callers can exclude implicit workspace configuration. */
+  globalOnly?: boolean;
   /** @deprecated Prefer configRootDir for new callers. */
   cwd?: string;
   configRootDir?: string;
@@ -190,9 +192,7 @@ function isValidGoogleModelId(id: unknown): id is GoogleModelId {
 }
 
 function isValidCursorQuotaPlan(plan: unknown): plan is CursorQuotaPlan {
-  return (
-    typeof plan === "string" && ["none", "pro", "pro-plus", "ultra"].includes(plan)
-  );
+  return typeof plan === "string" && ["none", "pro", "pro-plus", "ultra"].includes(plan);
 }
 
 function isValidPricingSnapshotSource(source: unknown): source is PricingSnapshotSource {
@@ -223,10 +223,16 @@ function isValidCursorBillingCycleStartDay(value: unknown): value is number {
 
 const VALID_OPENCODE_GO_WINDOWS = ["rolling", "weekly", "monthly"] as const;
 
-function isValidOpenCodeGoWindows(value: unknown): value is Array<"rolling" | "weekly" | "monthly"> {
+function isValidOpenCodeGoWindows(
+  value: unknown,
+): value is Array<"rolling" | "weekly" | "monthly"> {
   if (!Array.isArray(value)) return false;
   if (value.length === 0) return false;
-  return value.every((v) => typeof v === "string" && VALID_OPENCODE_GO_WINDOWS.includes(v as typeof VALID_OPENCODE_GO_WINDOWS[number]));
+  return value.every(
+    (v) =>
+      typeof v === "string" &&
+      VALID_OPENCODE_GO_WINDOWS.includes(v as (typeof VALID_OPENCODE_GO_WINDOWS)[number]),
+  );
 }
 
 function normalizeOptionalString(value: unknown): string | undefined {
@@ -311,7 +317,7 @@ function normalizeEnabledProviders(value: unknown): NormalizedEnabledProviders {
   if (!Array.isArray(value)) {
     return {
       value: [],
-      issues: ["expected \"auto\" or an array of provider ids"],
+      issues: ['expected "auto" or an array of provider ids'],
       invalidEmpty: true,
     };
   }
@@ -433,7 +439,9 @@ function extractTuiCompactStatusPatch(value: unknown): TuiCompactStatusPatch | u
   return Object.keys(patch).length > 0 ? patch : undefined;
 }
 
-function extractMaintainerAnnouncementsPatch(value: unknown): MaintainerAnnouncementsPatch | undefined {
+function extractMaintainerAnnouncementsPatch(
+  value: unknown,
+): MaintainerAnnouncementsPatch | undefined {
   if (!isPlainObject(value)) {
     return undefined;
   }
@@ -447,7 +455,6 @@ function extractMaintainerAnnouncementsPatch(value: unknown): MaintainerAnnounce
   if (hasOwnKey(value, "home") && typeof value.home === "boolean") {
     patch.home = value.home;
   }
-
 
   return Object.keys(patch).length > 0 ? patch : undefined;
 }
@@ -521,7 +528,10 @@ function extractValidatedQuotaToastPatch(
     patch.percentDisplayMode = quotaToastConfig.percentDisplayMode;
   }
 
-  if (hasOwnKey(quotaToastConfig, "minIntervalMs") && isPositiveNumber(quotaToastConfig.minIntervalMs)) {
+  if (
+    hasOwnKey(quotaToastConfig, "minIntervalMs") &&
+    isPositiveNumber(quotaToastConfig.minIntervalMs)
+  ) {
     patch.minIntervalMs = quotaToastConfig.minIntervalMs;
   }
 
@@ -570,7 +580,10 @@ function extractValidatedQuotaToastPatch(
     patch.alibabaCodingPlanTier = quotaToastConfig.alibabaCodingPlanTier;
   }
 
-  if (hasOwnKey(quotaToastConfig, "cursorPlan") && isValidCursorQuotaPlan(quotaToastConfig.cursorPlan)) {
+  if (
+    hasOwnKey(quotaToastConfig, "cursorPlan") &&
+    isValidCursorQuotaPlan(quotaToastConfig.cursorPlan)
+  ) {
     patch.cursorPlan = quotaToastConfig.cursorPlan;
   }
 
@@ -602,7 +615,10 @@ function extractValidatedQuotaToastPatch(
     }
   }
 
-  if (hasOwnKey(quotaToastConfig, "showOnIdle") && typeof quotaToastConfig.showOnIdle === "boolean") {
+  if (
+    hasOwnKey(quotaToastConfig, "showOnIdle") &&
+    typeof quotaToastConfig.showOnIdle === "boolean"
+  ) {
     patch.showOnIdle = quotaToastConfig.showOnIdle;
   }
 
@@ -886,7 +902,6 @@ function applyValidatedQuotaToastPatch(
       config.maintainerAnnouncements.home = patch.maintainerAnnouncements.home!;
       applySettingSource(settingSources, "maintainerAnnouncements.home", sourcePath);
     }
-
   }
 
   if (patch.layout) {
@@ -1014,7 +1029,8 @@ export async function loadConfig(
     networkSettingSources: Record<string, string>;
     configIssues: LoadConfigIssue[];
   }> {
-    const configRootDir = options?.configRootDir ?? getEffectiveConfigRoot(options?.cwd ?? process.cwd());
+    const configRootDir =
+      options?.configRootDir ?? getEffectiveConfigRoot(options?.cwd ?? process.cwd());
     const { configDirs } = getOpencodeRuntimeDirCandidates();
     const config = cloneDefaultConfig();
     const usedPaths: string[] = [];
@@ -1023,7 +1039,10 @@ export async function loadConfig(
     const settingSources: QuotaToastSettingSources = {};
     const configIssues: LoadConfigIssue[] = [];
 
-    for (const candidate of buildConfigLayerCandidates(configDirs, configRootDir)) {
+    const candidates = options?.globalOnly
+      ? configDirs.flatMap((dir) => buildConfigLayerCandidatesForRoot(dir, "global"))
+      : buildConfigLayerCandidates(configDirs, configRootDir);
+    for (const candidate of candidates) {
       if (candidate.kind === "legacy" && existsSync(candidate.pluginPath)) {
         continue;
       }
