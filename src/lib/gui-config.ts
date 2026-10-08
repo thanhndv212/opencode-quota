@@ -21,6 +21,20 @@ import { getOpencodeRuntimeDirs } from "./opencode-runtime-paths.js";
 export const GUI_CONFIG_VERSION = 1 as const;
 export const GUI_CONFIG_DIRNAME = "opencode-quota";
 export const GUI_CONFIG_FILENAME = "gui-config.json";
+export const MIN_GUI_REFRESH_INTERVAL_MS = 10_000;
+export const MAX_GUI_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+/** Zero disables scheduling; invalid values fall back to the default. */
+export function normalizeGuiRefreshInterval(value: unknown): number {
+  if (value === 0) return 0;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return DEFAULT_GUI_CONFIG.refreshIntervalMs;
+  }
+  return Math.min(
+    MAX_GUI_REFRESH_INTERVAL_MS,
+    Math.max(MIN_GUI_REFRESH_INTERVAL_MS, Math.floor(value)),
+  );
+}
 
 // =============================================================================
 // Types
@@ -118,7 +132,12 @@ async function loadConfig(forceReload = false): Promise<GuiConfig> {
     const raw = await readFile(filePath, "utf-8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && parsed.version) {
-      cachedConfig = { ...DEFAULT_GUI_CONFIG, ...parsed, version: GUI_CONFIG_VERSION };
+      cachedConfig = {
+        ...DEFAULT_GUI_CONFIG,
+        ...parsed,
+        version: GUI_CONFIG_VERSION,
+        refreshIntervalMs: normalizeGuiRefreshInterval(parsed.refreshIntervalMs),
+      };
     } else {
       cachedConfig = { ...DEFAULT_GUI_CONFIG };
     }
@@ -161,7 +180,13 @@ export async function getGuiConfigValue<K extends keyof GuiConfig>(key: K): Prom
  */
 export async function updateGuiConfig(patch: Partial<GuiConfig>): Promise<GuiConfig> {
   const config = await loadConfig(true);
-  const updated: GuiConfig = { ...config, ...patch, version: GUI_CONFIG_VERSION, updatedAt: Date.now() };
+  const updated: GuiConfig = {
+    ...config,
+    ...patch,
+    version: GUI_CONFIG_VERSION,
+    updatedAt: Date.now(),
+  };
+  updated.refreshIntervalMs = normalizeGuiRefreshInterval(updated.refreshIntervalMs);
   await saveConfig(updated);
   return updated;
 }

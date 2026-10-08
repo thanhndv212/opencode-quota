@@ -1,6 +1,6 @@
 # GUI-01 standalone configuration
 
-Issue: [#13](https://github.com/thanhndv212/opencode-quota/issues/13). Branch: `fix/gui-01-standalone-config`. Reviewed: 2026-10-09. Status: implementation and local validation complete; hosted CI/review/merge pending.
+Issue: [#13](https://github.com/thanhndv212/opencode-quota/issues/13). Branch: `fix/gui-01-standalone-config`. Reviewed: 2026-10-09. Status: complete; [PR #40](https://github.com/thanhndv212/opencode-quota/pull/40) merged at `f11e8fb`, with [green main CI 37852563879](https://github.com/thanhndv212/opencode-quota/actions/runs/37852563879).
 
 ## Behavior
 
@@ -25,7 +25,7 @@ The shared provider runtime context builder replaces the GUI's duplicated field 
 | Selected project secrets ignored; trusted global secret accepted                                | Chutes resolver fixture in `tests/gui.quota-config.test.ts`; existing full auth/provider suite |
 | Installed main/preload expose effective config and explicit reload                              | `scripts/smoke-gui.mjs`, `scripts/fixtures/gui-smoke.mjs`                                      |
 
-Node 22.23.3 / pnpm 10.0.0: typecheck, clean build, 138 Vitest files / 1,442 tests, installed-tarball `build:check`, and installed-tarball macOS Electron 42.5.0 smoke passed. The smoke verifies global settings despite a conflicting cwd sidecar, config reload through real IPC/preload, six tabs, manual/hidden-window refresh, version and quit. Provider IPC is fixture-backed; live-provider, Linux GUI, DMG installation and actual OpenCode host coverage are not established locally. Hosted CI and green merged-main CI remain required before marking GUI-01 done.
+Node 22.23.3 / pnpm 10.0.0: typecheck, clean build, 138 Vitest files / 1,442 tests, installed-tarball `build:check`, and installed-tarball macOS Electron 42.5.0 smoke passed. The smoke verifies global settings despite a conflicting cwd sidecar, config reload through real IPC/preload, six tabs, manual/hidden-window refresh, version and quit. Provider IPC is fixture-backed. PR CI 37852312911 and merged-main CI 37852563879 passed all six checks, including Node 20/22 installed tarballs and Linux/macOS Electron. Live-provider, DMG installation and actual OpenCode host coverage remain outside that gate.
 
 ## Compatibility and rollback
 

@@ -228,6 +228,8 @@ Standalone quota settings use the same `opencode-quota/quota-toast.json` loader 
 
 Settings load at startup and reload when you click Refresh. The preload APIs `quotaApi.config.quota()` and `quotaApi.config.reloadQuota()` expose effective quota settings, their source paths, and validation issues. Malformed sidecars produce configuration errors in the Dashboard and retain validated defaults; they do not activate the legacy config fallback.
 
+Quota refresh runs in Electron main, including while the window is hidden. GUI `refreshIntervalMs` defaults to five minutes and accepts 10 seconds through 24 hours; set it to `0` to disable automatic refresh. Suspend pauses the timer; resume requests one refresh. Manual and tray refresh requests coalesce, and failed refreshes back off automatically while showing a labelled previous observation. The preload API `quotaApi.quota.state()` exposes refresh status; `quotaApi.quota.onUpdate(callback)` returns an unsubscribe function for live updates.
+
 On **Linux**, `--no-sandbox` is auto-appended unless you already pass it via `ELECTRON_ARGS`. The GUI main process also enables `--no-sandbox` automatically on Linux. If your system tray is unsupported (e.g. vanilla Gnome, Wayland without AppIndicator), the app falls back to window-only mode.
 
 ### Install as a desktop app

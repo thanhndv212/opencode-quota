@@ -15,6 +15,19 @@ const quotaApi = {
   // ── Quota ──────────────────────────────────────────────
   quota: {
     fetch: (bypassCache?: boolean) => ipcRenderer.invoke("quota:fetch", { bypassCache }),
+    state: () => ipcRenderer.invoke("quota:state"),
+    onUpdate: (
+      callback: (snapshot: import("./quota-refresh-controller.js").QuotaRefreshSnapshot) => void,
+    ) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        snapshot: import("./quota-refresh-controller.js").QuotaRefreshSnapshot,
+      ) => callback(snapshot);
+      ipcRenderer.on("quota:updated", listener);
+      return () => {
+        ipcRenderer.removeListener("quota:updated", listener);
+      };
+    },
   },
 
   // ── Token Usage ────────────────────────────────────────

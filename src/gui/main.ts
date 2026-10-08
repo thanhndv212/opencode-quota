@@ -10,7 +10,16 @@
  *   opencode-quota gui              # Alternative invocation
  */
 
-import { app, BrowserWindow, ipcMain, nativeImage, Tray, Menu, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  nativeImage,
+  Tray,
+  Menu,
+  shell,
+  powerMonitor,
+} from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 import { existsSync, readFileSync } from "fs";
@@ -20,6 +29,7 @@ import {
   loadStandaloneQuotaConfig,
   type StandaloneQuotaConfig,
 } from "./quota-config.js";
+import { QuotaRefreshController } from "./quota-refresh-controller.js";
 import {
   getGuiConfig,
   updateGuiConfig,
@@ -145,23 +155,21 @@ function createTrayIcon(): Electron.NativeImage {
 // IPC handler registration
 // =============================================================================
 
-function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
+function registerIpcHandlers(initialConfig: StandaloneQuotaConfig, guiConfig: GuiConfig) {
   let quotaConfig = initialConfig;
   async function reloadQuotaConfig() {
-    quotaConfig = await loadStandaloneQuotaConfig(initialConfig.projectRoot);
+    const loaded = await loadStandaloneQuotaConfig(initialConfig.projectRoot);
+    if (JSON.stringify(loaded.config) !== JSON.stringify(quotaConfig.config)) {
+      controller.clearObservation();
+    }
+    quotaConfig = loaded;
     return quotaConfig;
   }
-  // ── Quota ──────────────────────────────────────────
-  ipcMain.handle("quota:fetch", async (_event, params: { bypassCache?: boolean }) => {
-    try {
-      // Manual refresh is also an explicit settings reload. Automatic refresh
-      // uses the last loaded snapshot until GUI-02 owns the refresh controller.
-      const effective = params?.bypassCache ? await reloadQuotaConfig() : quotaConfig;
-      const result = await quotaIpc.fetchAllQuota(
-        effective.config,
-        params?.bypassCache,
-        effective.meta,
-      );
+  const controller = new QuotaRefreshController({
+    intervalMs: guiConfig.refreshIntervalMs,
+    fetch: async (fresh) => {
+      const effective = fresh ? await reloadQuotaConfig() : quotaConfig;
+      const result = await quotaIpc.fetchAllQuota(effective.config, fresh, effective.meta);
       return {
         ...result,
         errors: [
@@ -172,14 +180,18 @@ function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
           })),
         ],
       };
-    } catch (err) {
-      return {
-        entries: [],
-        errors: [{ label: "quota", message: err instanceof Error ? err.message : String(err) }],
-        detectedProviderIds: [],
-      };
-    }
+    },
+    onChange: (snapshot) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("quota:updated", snapshot);
+      }
+    },
   });
+  // ── Quota ──────────────────────────────────────────
+  ipcMain.handle("quota:fetch", (_event, params: { bypassCache?: boolean }) =>
+    controller.refresh(Boolean(params?.bypassCache)),
+  );
+  ipcMain.handle("quota:state", () => controller.getState());
 
   // ── Token Usage ────────────────────────────────────
   ipcMain.handle("tokens:query", async (_event, params: Record<string, unknown>) => {
@@ -337,12 +349,16 @@ function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
   ipcMain.handle("config:quota", () => quotaConfig);
   ipcMain.handle("config:quota-reload", reloadQuotaConfig);
   ipcMain.handle("config:get", async () => getGuiConfig());
-  ipcMain.handle("config:update", async (_e, p: { patch: Record<string, unknown> }) =>
-    updateGuiConfig(p.patch as Partial<GuiConfig>),
-  );
+  ipcMain.handle("config:update", async (_e, p: { patch: Record<string, unknown> }) => {
+    const updated = await updateGuiConfig(p.patch as Partial<GuiConfig>);
+    controller.setInterval(updated.refreshIntervalMs);
+    return updated;
+  });
   ipcMain.handle("config:reset", async () => {
     const { resetGuiConfig } = await import("../lib/gui-config.js");
-    return resetGuiConfig();
+    const updated = await resetGuiConfig();
+    controller.setInterval(updated.refreshIntervalMs);
+    return updated;
   });
 
   // ── App ────────────────────────────────────────────
@@ -389,6 +405,7 @@ function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
       return dashboardHistoryIpc.getWeeklyResets(params);
     },
   );
+  return controller;
 }
 
 // =============================================================================
@@ -398,6 +415,7 @@ function registerIpcHandlers(initialConfig: StandaloneQuotaConfig) {
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let toggleCooldownUntil = 0;
+let quotaController: QuotaRefreshController | null = null;
 
 function createWindow(guiConfig: GuiConfig): BrowserWindow {
   const preloadPath = resolvePreloadPath();
@@ -506,7 +524,9 @@ app
     await preloadBudgetAlerts();
 
     // Register IPC handlers
-    registerIpcHandlers(quotaConfig);
+    quotaController = registerIpcHandlers(quotaConfig, guiConfig);
+    powerMonitor.on("suspend", suspendQuotaRefresh);
+    powerMonitor.on("resume", resumeQuotaRefresh);
 
     // Create tray icon (with fallback when system tray is unsupported)
     const icon = createTrayIcon();
@@ -532,9 +552,7 @@ app
         {
           label: "Refresh Quota",
           click: () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("app:refresh");
-            }
+            void quotaController?.refresh(true);
           },
         },
         { type: "separator" },
@@ -561,6 +579,7 @@ app
 
     // Create the popup window
     mainWindow = createWindow(guiConfig);
+    void quotaController.start();
 
     // Prevent window from being closed — hide instead
     mainWindow.on("close", (event: Electron.Event) => {
@@ -596,6 +615,10 @@ app.on("activate", () => {
 });
 
 app.on("before-quit", () => {
+  quotaController?.dispose();
+  quotaController = null;
+  powerMonitor.removeListener("suspend", suspendQuotaRefresh);
+  powerMonitor.removeListener("resume", resumeQuotaRefresh);
   // Cleanup tray
   if (tray && !tray.isDestroyed()) {
     tray.destroy();
@@ -603,3 +626,11 @@ app.on("before-quit", () => {
   tray = null;
   mainWindow = null;
 });
+
+function suspendQuotaRefresh() {
+  quotaController?.suspend();
+}
+
+function resumeQuotaRefresh() {
+  void quotaController?.resume();
+}

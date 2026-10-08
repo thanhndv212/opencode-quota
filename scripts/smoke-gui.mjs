@@ -28,19 +28,27 @@ await withConsumer(process.argv[2], async (root) => {
   await writeFile(
     path.join(settingsDir, "quota-toast.json"),
     JSON.stringify({
-      enabledProviders: ["cursor"],
+      enabledProviders: ["openai"],
       cursorPlan: "pro",
+      minIntervalMs: 1,
       requestTimeoutMs: 9000,
       pricingSnapshot: { source: "bundled", autoRefresh: 0 },
+    }),
+  );
+  await mkdir(path.join(env.XDG_DATA_HOME, "opencode"), { recursive: true });
+  await writeFile(
+    path.join(env.XDG_DATA_HOME, "opencode", "auth.json"),
+    JSON.stringify({
+      openai: { type: "oauth", access: "gui-smoke-fixture-token", expires: Date.now() + 3_600_000 },
     }),
   );
   // A launch-directory sidecar must not override global settings.
   await mkdir(path.join(root, "opencode-quota"));
   await writeFile(
     path.join(root, "opencode-quota", "quota-toast.json"),
-    JSON.stringify({ enabledProviders: ["openai"] }),
+    JSON.stringify({ enabledProviders: ["cursor"] }),
   );
   const args = [fileURLToPath(new URL("fixtures/gui-smoke.mjs", import.meta.url))];
   if (process.platform === "linux") args.push("--no-sandbox");
-  await run(electron, args, { cwd: root, env, timeout: 45_000 });
+  await run(electron, args, { cwd: root, env, timeout: 60_000 });
 });
