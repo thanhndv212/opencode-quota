@@ -11,6 +11,7 @@ import {
   resetGuiConfig,
   updateWindowBounds,
   clearGuiConfigCache,
+  normalizeGuiRefreshInterval,
   DEFAULT_GUI_CONFIG,
 } from "../src/lib/gui-config.js";
 
@@ -62,6 +63,18 @@ describe("gui-config", () => {
       expect(updated.theme).toBe("system");
       expect(updated.launchAtLogin).toBe(true);
       expect(updated.refreshIntervalMs).toBe(60000);
+    });
+
+    it("persists normalized intervals and supports disabling scheduled refresh", async () => {
+      expect((await updateGuiConfig({ refreshIntervalMs: 1 })).refreshIntervalMs).toBe(10_000);
+      clearGuiConfigCache();
+      expect((await getGuiConfig()).refreshIntervalMs).toBe(10_000);
+      expect((await updateGuiConfig({ refreshIntervalMs: 0 })).refreshIntervalMs).toBe(0);
+      clearGuiConfigCache();
+      expect((await getGuiConfig()).refreshIntervalMs).toBe(0);
+      expect(normalizeGuiRefreshInterval(Number.POSITIVE_INFINITY)).toBe(
+        DEFAULT_GUI_CONFIG.refreshIntervalMs,
+      );
     });
 
     it("persists across cache clears", async () => {
