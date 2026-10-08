@@ -1,6 +1,6 @@
 # GUI-02 standalone refresh controller
 
-Issue: [#14](https://github.com/thanhndv212/opencode-quota/issues/14). Branch: `fix/gui-02-refresh-controller`. Reviewed: 2026-10-09. Status: implementation/local validation; hosted CI/review/merge pending.
+Issue: [#14](https://github.com/thanhndv212/opencode-quota/issues/14). Branch: `fix/gui-02-refresh-controller`. Reviewed: 2026-10-09. Status: complete; [PR #41](https://github.com/thanhndv212/opencode-quota/pull/41) merged at `0139dd8`, with [green main CI 37853670522](https://github.com/thanhndv212/opencode-quota/actions/runs/37853670522).
 
 ## Behavior and boundaries
 
@@ -26,7 +26,7 @@ A failed or unexpectedly empty refresh retains a visibly labelled previous obser
 | Interval persistence and malformed values                              | `tests/lib.gui-config.test.ts`, `tests/gui.quota-refresh-controller.test.ts`                                           |
 | Renderer updates, snapshot isolation, revisions and scoped unsubscribe | Controller tests; installed main/preload/renderer smoke                                                                |
 
-Node 22.23.3 / pnpm 10.0.0: typecheck, clean build, 139 Vitest files / 1,455 tests, installed-tarball consumer check and actual macOS Electron 42.5.0 smoke passed. Validation results are recorded in the delivery tracker. Provider HTTP and power events are fixtures; this does not establish live provider, physical OS sleep/wake, DMG installation or notification coverage. Hosted Linux/macOS Electron checks and merged-main CI must pass before marking GUI-02 done.
+Node 22.23.3 / pnpm 10.0.0: typecheck, clean build, 139 Vitest files / 1,455 tests, installed-tarball consumer check and actual macOS Electron 42.5.0 smoke passed. Validation results are recorded in the delivery tracker. Provider HTTP and power events are fixtures; this does not establish live provider, physical OS sleep/wake, DMG installation or notification coverage. PR CI 37853397937 and merged-main CI 37853670522 passed all six checks: quality/process isolation, Node 20/22 installed tarballs, Linux/macOS installed Electron, and the required gate.
 
 ## Compatibility and rollback
 
