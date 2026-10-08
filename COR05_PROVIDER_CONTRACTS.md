@@ -1,6 +1,6 @@
 # COR-05 provider payload and window contracts
 
-Issue: #12. Branch: `fix/cor-05-provider-contracts`. Status: implementation and local validation; hosted CI/merge pending. Reviewed 2026-10-08.
+Issue: #12. PR: [#39](https://github.com/thanhndv212/opencode-quota/pull/39). Branch: `fix/cor-05-provider-contracts`. Status: implementation and local validation; hosted CI/merge pending. Reviewed 2026-10-08.
 
 ## Provenance and adaptation
 
@@ -41,6 +41,6 @@ Node 22.23.3 / pnpm 10.0.0: typecheck, 137 Vitest files / 1,437 tests, installed
 
 No config or credential files are rewritten. Existing PAT configs without `billingModel` select AI Credits. Legacy annual Pro/Pro+ reporting requires explicit `legacy_premium_requests`; managed or ineligible tiers cannot use that mode. This changes the endpoint used by existing PAT configs and must be included in release notes. Legacy OAuth payloads remain readable.
 
-Amounts and credits retain distinct units. No database/export schema migration is included. Managed AI Credit usage may make additional quota/billing requests for its applicable dollar budget, with bounded pagination; it never invokes a model. Budget failures retain usage and produce warnings.
+Amounts and credits retain distinct units. No database/export schema migration is included. TypeScript consumers must handle optional totals/percentages and the new plan-only result mode. Managed AI Credit usage may make additional quota/billing requests for its applicable dollar budget, with bounded pagination; it never invokes a model. Budget failures retain usage and produce warnings.
 
 Rollback reverts this implementation and restores the prior package/config selection together. Old results remain separated by cache qualifiers. Fixture and installed-package evidence does not certify live GitHub/ChatGPT contracts or actual OpenCode host compatibility.

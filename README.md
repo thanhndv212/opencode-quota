@@ -790,7 +790,12 @@ AI Credit reports show total usage, included consumption and billed usage when s
 
 Use `"tier": "business"` plus `"organization"` for organization reports, or `"tier": "enterprise"` plus `"enterprise"` for enterprise reports. Optional `"username"` and `"organization"` filter managed usage. Enterprise billing requires a classic PAT with billing access. GHE.com routing uses a validated `"enterpriseUrl": "YOUR_SUBDOMAIN.ghe.com"` bound to the selected PAT/OAuth credential; arbitrary hosts and URL credentials are rejected.
 
-OpenAI subscription windows use exact durations: 18,000 seconds (5h), 604,800 (weekly), and 2,628,000 (monthly). Unknown durations and conflicting duplicate windows are omitted; absent limits do not create quota rows.
+</details>
+
+<details>
+<summary><strong>OpenAI subscription windows</strong></summary>
+
+OpenAI quota rows follow the reported window duration: 5h, weekly or monthly, including Business subscriptions. Unknown durations and conflicting duplicate windows are omitted; absent limits do not create quota rows.
 
 </details>
 
