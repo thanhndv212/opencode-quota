@@ -1,3 +1,5 @@
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import { queryKimiQuotaWithAuth } from "../lib/kimi.js";
 import type {
   QuotaProvider,
   QuotaProviderContext,
@@ -16,6 +18,12 @@ function formatUsageRight(window: { used: number; limit: number }): string {
 
 export const kimiCodeProvider: QuotaProvider = {
   id: "kimi-for-coding",
+
+  cachePolicy: createResolvedAuthCachePolicy("kimi-for-coding", async (ctx) => {
+    const auth = await resolveKimiAuthCached({ maxAgeMs: 0 });
+    if (auth.state !== "configured") return null;
+    return { credential: auth.apiKey, fetch: () => fetchWithAuth(ctx, auth) };
+  }),
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     const providerAvailable = await isCanonicalProviderAvailable({
@@ -38,40 +46,41 @@ export const kimiCodeProvider: QuotaProvider = {
     return normalizeQuotaProviderId(provider) === "kimi-for-coding";
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const auth = await resolveKimiAuthCached({
-      maxAgeMs: DEFAULT_KIMI_AUTH_CACHE_MAX_AGE_MS,
-    });
-
-    if (auth.state === "none") {
-      return notAttemptedResult();
-    }
-
-    if (auth.state === "invalid") {
-      return attemptedErrorResult("Kimi Code", auth.error);
-    }
-
-    const result = await queryKimiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
-
-    if (!result) {
-      return notAttemptedResult();
-    }
-
-    if (!result.success) {
-      return attemptedErrorResult("Kimi Code", result.error);
-    }
-
-    const entries: QuotaToastEntry[] = result.windows.map((window) => ({
-      name: `${result.label} ${window.label}`,
-      group: result.label,
-      label: `${window.label}:`,
-      right: formatUsageRight(window),
-      percentRemaining: window.percentRemaining,
-      resetTimeIso: window.resetTimeIso,
-    }));
-
-    return attemptedResult(entries, [], {
-      singleWindowDisplayName: result.label,
-    });
-  },
+  fetch: fetchWithAuth,
 };
+
+async function fetchWithAuth(
+  ctx: QuotaProviderContext,
+  auth?: { apiKey: string },
+): Promise<QuotaProviderResult> {
+  if (!auth) {
+    const selected = await resolveKimiAuthCached({ maxAgeMs: DEFAULT_KIMI_AUTH_CACHE_MAX_AGE_MS });
+    if (selected.state === "none") return notAttemptedResult();
+    if (selected.state === "invalid") return attemptedErrorResult("Kimi Code", selected.error);
+  }
+
+  const result = auth
+    ? await queryKimiQuotaWithAuth(auth, { requestTimeoutMs: ctx.config?.requestTimeoutMs })
+    : await queryKimiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
+
+  if (!result) {
+    return notAttemptedResult();
+  }
+
+  if (!result.success) {
+    return attemptedErrorResult("Kimi Code", result.error);
+  }
+
+  const entries: QuotaToastEntry[] = result.windows.map((window) => ({
+    name: `${result.label} ${window.label}`,
+    group: result.label,
+    label: `${window.label}:`,
+    right: formatUsageRight(window),
+    percentRemaining: window.percentRemaining,
+    resetTimeIso: window.resetTimeIso,
+  }));
+
+  return attemptedResult(entries, [], {
+    singleWindowDisplayName: result.label,
+  });
+}

@@ -4,13 +4,12 @@
  * Normalizes Z.ai quota into generic toast entries.
  */
 
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import { queryZaiQuotaWithAuth } from "../lib/zai.js";
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
 import { queryZaiQuota } from "../lib/zai.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
-import {
-  DEFAULT_ZAI_AUTH_CACHE_MAX_AGE_MS,
-  resolveZaiAuthCached,
-} from "../lib/zai-auth.js";
+import { DEFAULT_ZAI_AUTH_CACHE_MAX_AGE_MS, resolveZaiAuthCached } from "../lib/zai-auth.js";
 import {
   attemptedResult,
   groupedPercentWindowEntries,
@@ -19,6 +18,12 @@ import {
 
 export const zaiProvider: QuotaProvider = {
   id: "zai",
+
+  cachePolicy: createResolvedAuthCachePolicy("zai", async (ctx) => {
+    const auth = await resolveZaiAuthCached({ maxAgeMs: 0 });
+    if (auth.state !== "configured") return null;
+    return { credential: auth.apiKey, fetch: () => fetchWithAuth(ctx, auth) };
+  }),
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     const providerAvailable = await isCanonicalProviderAvailable({
@@ -45,26 +50,33 @@ export const zaiProvider: QuotaProvider = {
     return lower.includes("glm");
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryZaiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
-
-    return mapNullableProviderResult(result, {
-      errorLabel: "Z.ai",
-      onSuccess: (result) =>
-        attemptedResult(
-          groupedPercentWindowEntries({
-            group: result.label,
-            windows: [
-              { window: result.windows.fiveHour, suffix: "5h", label: "5h:" },
-              { window: result.windows.weekly, suffix: "Weekly", label: "Weekly:" },
-              { window: result.windows.mcp, suffix: "MCP", label: "MCP:" },
-            ],
-          }),
-          [],
-          {
-            singleWindowDisplayName: result.label,
-          },
-        ),
-    });
-  },
+  fetch: fetchWithAuth,
 };
+
+async function fetchWithAuth(
+  ctx: QuotaProviderContext,
+  auth?: { apiKey: string },
+): Promise<QuotaProviderResult> {
+  const result = auth
+    ? await queryZaiQuotaWithAuth(auth, { requestTimeoutMs: ctx.config?.requestTimeoutMs })
+    : await queryZaiQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
+
+  return mapNullableProviderResult(result, {
+    errorLabel: "Z.ai",
+    onSuccess: (result) =>
+      attemptedResult(
+        groupedPercentWindowEntries({
+          group: result.label,
+          windows: [
+            { window: result.windows.fiveHour, suffix: "5h", label: "5h:" },
+            { window: result.windows.weekly, suffix: "Weekly", label: "Weekly:" },
+            { window: result.windows.mcp, suffix: "MCP", label: "MCP:" },
+          ],
+        }),
+        [],
+        {
+          singleWindowDisplayName: result.label,
+        },
+      ),
+  });
+}

@@ -244,13 +244,23 @@ async function fetchKimiQuotaFromUrl(
   }
 }
 
-export async function queryKimiQuota(options: { requestTimeoutMs?: number } = {}): Promise<KimiResult> {
+export async function queryKimiQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<KimiResult> {
   const auth = await resolveKimiAuthCached({ maxAgeMs: DEFAULT_KIMI_AUTH_CACHE_MAX_AGE_MS });
   if (auth.state === "none") return null;
   if (auth.state === "invalid") {
     return { success: false, error: auth.error };
   }
 
+  return queryKimiQuotaWithAuth(auth, options);
+}
+
+/** Fetch using the credential selected for this cache transaction. */
+export async function queryKimiQuotaWithAuth(
+  auth: { apiKey: string },
+  options: { requestTimeoutMs?: number } = {},
+): ReturnType<typeof queryKimiQuota> {
   const result = await fetchKimiQuotaFromUrl(KIMI_USAGE_URL, auth.apiKey, options.requestTimeoutMs);
   if (result.ok && result.windows.length > 0) {
     return {

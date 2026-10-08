@@ -30,12 +30,9 @@ type ReadConfigFileResult =
 
 function getConfigCandidatePaths(): string[] {
   const { configDirs } = getOpencodeRuntimeDirCandidates();
-  const paths = configDirs.map((dir) =>
-    join(dir, "opencode-quota", "ollama-cloud.json"),
-  );
+  const paths = configDirs.map((dir) => join(dir, "opencode-quota", "ollama-cloud.json"));
 
-  const xdgConfigDir =
-    xdgConfig || join(homedir(), ".config");
+  const xdgConfigDir = xdgConfig || join(homedir(), ".config");
   paths.push(join(xdgConfigDir, "ollama-usage", "config.yaml"));
 
   const home = homedir();
@@ -117,9 +114,7 @@ export async function resolveOllamaCloudConfig(): Promise<ResolvedOllamaCloudCon
 
   for (const path of candidates) {
     const isYaml = path.endsWith(".yaml");
-    const fileResult = isYaml
-      ? await readYamlConfigFile(path)
-      : await readJsonConfigFile(path);
+    const fileResult = isYaml ? await readYamlConfigFile(path) : await readJsonConfigFile(path);
 
     if (fileResult.state === "missing") continue;
     if (fileResult.state === "invalid") {
@@ -143,23 +138,14 @@ export async function resolveOllamaCloudConfig(): Promise<ResolvedOllamaCloudCon
   return { state: "none" };
 }
 
-let cachedConfig: ResolvedOllamaCloudConfig | null = null;
-let cachedAt = 0;
-
 const DEFAULT_CACHE_MAX_AGE_MS = 30_000;
 export { DEFAULT_CACHE_MAX_AGE_MS as DEFAULT_OLLAMA_CLOUD_CONFIG_CACHE_MAX_AGE_MS };
 
-export async function resolveOllamaCloudConfigCached(params?: {
+/** Compatibility wrapper: credential-bearing config is always resolved fresh. */
+export async function resolveOllamaCloudConfigCached(_params?: {
   maxAgeMs?: number;
 }): Promise<ResolvedOllamaCloudConfig> {
-  const maxAgeMs = Math.max(0, params?.maxAgeMs ?? DEFAULT_CACHE_MAX_AGE_MS);
-  const now = Date.now();
-  if (cachedConfig && now - cachedAt < maxAgeMs) {
-    return cachedConfig;
-  }
-  cachedConfig = await resolveOllamaCloudConfig();
-  cachedAt = now;
-  return cachedConfig;
+  return resolveOllamaCloudConfig();
 }
 
 export async function getOllamaCloudConfigDiagnostics(): Promise<OllamaCloudConfigDiagnostics> {

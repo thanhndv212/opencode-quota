@@ -10,6 +10,8 @@
  *     with matching OPENCODE_GO_AUTH_COOKIE, OPENCODE_GO_AUTH_COOKIE_2, ...
  */
 
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import type { ResolvedOpenCodeGoConfig } from "../lib/opencode-go-config.js";
 import type {
   QuotaProvider,
   QuotaProviderContext,
@@ -19,7 +21,6 @@ import type {
 import type { OpenCodeGoResult, OpenCodeGoWindowKey } from "../lib/types.js";
 import {
   DEFAULT_OPENCODE_GO_CONFIG_CACHE_MAX_AGE_MS,
-  resolveAllOpenCodeGoConfigs,
   resolveOpenCodeGoConfigCached,
   type OpenCodeGoConfig,
 } from "../lib/opencode-go-config.js";
@@ -59,7 +60,9 @@ function isDefaultOpenCodeGoWindowSelection(windows: OpenCodeGoWindowKey[]): boo
 }
 
 function formatMissingWindowList(windows: OpenCodeGoWindowKey[]): string {
-  return windows.map((window) => `${window} (${OPENCODE_GO_WINDOW_LABELS[window].dashboardField})`).join(", ");
+  return windows
+    .map((window) => `${window} (${OPENCODE_GO_WINDOW_LABELS[window].dashboardField})`)
+    .join(", ");
 }
 
 /**
@@ -87,7 +90,9 @@ function buildOpenCodeGoEntries(
 
     const labels = OPENCODE_GO_WINDOW_LABELS[window];
     entries.push({
-      name: entryPrefix ? `${entryPrefix} ${labels.name.replace(OPENCODE_GO_PROVIDER_LABEL + " ", "")}` : labels.name,
+      name: entryPrefix
+        ? `${entryPrefix} ${labels.name.replace(OPENCODE_GO_PROVIDER_LABEL + " ", "")}`
+        : labels.name,
       group: groupLabel,
       label: labels.label,
       percentRemaining: usage.percentRemaining,
@@ -101,7 +106,10 @@ function buildOpenCodeGoEntries(
 /**
  * Build display names for a workspace.
  */
-function workspaceDisplayNames(cfg: OpenCodeGoConfig, isMulti: boolean): {
+function workspaceDisplayNames(
+  cfg: OpenCodeGoConfig,
+  isMulti: boolean,
+): {
   groupLabel: string;
   entryPrefix: string;
 } {
@@ -123,6 +131,22 @@ function workspaceDisplayNames(cfg: OpenCodeGoConfig, isMulti: boolean): {
 
 export const opencodeGoProvider: QuotaProvider = {
   id: "opencode-go",
+  cachePolicy: createResolvedAuthCachePolicy("opencode-go", async (ctx) => {
+    const config = await resolveOpenCodeGoConfigCached({ maxAgeMs: 0 });
+    if (config.state !== "configured" && config.state !== "configured_multi") return null;
+    const workspaces = config.state === "configured" ? [config.config] : config.configs;
+    if (workspaces.length === 0) return null;
+    return {
+      credential: JSON.stringify(
+        workspaces.map(({ workspaceId, authCookie, label }) => [
+          workspaceId,
+          authCookie,
+          label ?? "",
+        ]),
+      ),
+      fetch: () => fetchWithConfig(ctx, config),
+    };
+  }),
 
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     const config = await resolveOpenCodeGoConfigCached({
@@ -136,99 +160,104 @@ export const opencodeGoProvider: QuotaProvider = {
     return normalizeQuotaProviderId(provider) === "opencode-go";
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const config = await resolveOpenCodeGoConfigCached({
-      maxAgeMs: DEFAULT_OPENCODE_GO_CONFIG_CACHE_MAX_AGE_MS,
-    });
-
-    if (config.state === "none") {
-      return notAttemptedResult();
-    }
-
-    if (config.state === "incomplete") {
-      return attemptedErrorResult(
-        OPENCODE_GO_PROVIDER_LABEL,
-        `Missing ${config.missing} (source: ${config.source})`,
-      );
-    }
-
-    if (config.state === "invalid") {
-      return attemptedErrorResult(
-        OPENCODE_GO_PROVIDER_LABEL,
-        `Invalid config (${config.source}): ${config.error}`,
-      );
-    }
-
-    // Resolve all workspaces (1 for single, N for multi)
-    const allConfigs = await resolveAllOpenCodeGoConfigs();
-    const isMulti = allConfigs.length > 1;
-    const windows = ctx.config.opencodeGoWindows ?? OPENCODE_GO_WINDOW_ORDER;
-    const requestTimeoutMs = ctx.config?.requestTimeoutMsConfigured
-      ? ctx.config.requestTimeoutMs
-      : undefined;
-
-    // Fetch all workspaces in parallel
-    const fetchResults = await Promise.allSettled(
-      allConfigs.map(async (cfg) => {
-        const result = await queryOpenCodeGoQuota(cfg.workspaceId, cfg.authCookie, {
-          requestTimeoutMs,
-        });
-        return { config: cfg, result };
-      }),
-    );
-
-    // Collect entries and errors
-    const allEntries: QuotaToastEntry[] = [];
-    const allErrors: Array<{ label: string; message: string }> = [];
-    let anySuccess = false;
-
-    for (const settled of fetchResults) {
-      if (settled.status === "rejected") {
-        allErrors.push({
-          label: OPENCODE_GO_PROVIDER_LABEL,
-          message: `Unexpected error: ${settled.reason instanceof Error ? settled.reason.message : String(settled.reason)}`,
-        });
-        continue;
-      }
-
-      const { config: cfg, result } = settled.value;
-
-      if (!result) continue;
-
-      if (!result.success) {
-        allErrors.push({
-          label: isMulti ? `${OPENCODE_GO_PROVIDER_LABEL} (${cfg.label || cfg.workspaceId})` : OPENCODE_GO_PROVIDER_LABEL,
-          message: result.error,
-        });
-        continue;
-      }
-
-      anySuccess = true;
-      const { groupLabel, entryPrefix } = workspaceDisplayNames(cfg, isMulti);
-      const entries = buildOpenCodeGoEntries(result, windows, groupLabel, entryPrefix);
-
-      // Check for missing windows in this workspace's result
-      const missingSelectedWindows = windows.filter((window) => !result[window]);
-      if (missingSelectedWindows.length > 0 && !isDefaultOpenCodeGoWindowSelection(windows)) {
-        allErrors.push({
-          label: groupLabel,
-          message: `Selected OpenCode Go dashboard window(s) missing: ${formatMissingWindowList(missingSelectedWindows)}`,
-        });
-      }
-
-      if (entries.length > 0) {
-        allEntries.push(...entries);
-      }
-    }
-
-    if (!anySuccess && allEntries.length === 0) {
-      // If we have specific errors, return them; otherwise not attempted
-      if (allErrors.length > 0) {
-        return { attempted: true, entries: [], errors: allErrors };
-      }
-      return notAttemptedResult();
-    }
-
-    return attemptedResult(allEntries, allErrors.length > 0 ? allErrors : undefined);
+  async fetch(ctx) {
+    return fetchWithConfig(ctx, await resolveOpenCodeGoConfigCached({ maxAgeMs: 0 }));
   },
 };
+
+async function fetchWithConfig(
+  ctx: QuotaProviderContext,
+  config: ResolvedOpenCodeGoConfig,
+): Promise<QuotaProviderResult> {
+  if (config.state === "none") {
+    return notAttemptedResult();
+  }
+
+  if (config.state === "incomplete") {
+    return attemptedErrorResult(
+      OPENCODE_GO_PROVIDER_LABEL,
+      `Missing ${config.missing} (source: ${config.source})`,
+    );
+  }
+
+  if (config.state === "invalid") {
+    return attemptedErrorResult(
+      OPENCODE_GO_PROVIDER_LABEL,
+      `Invalid config (${config.source}): ${config.error}`,
+    );
+  }
+
+  // Resolve all workspaces (1 for single, N for multi)
+  const allConfigs = config.state === "configured" ? [config.config] : config.configs;
+  const isMulti = allConfigs.length > 1;
+  const windows = ctx.config.opencodeGoWindows ?? OPENCODE_GO_WINDOW_ORDER;
+  const requestTimeoutMs = ctx.config?.requestTimeoutMsConfigured
+    ? ctx.config.requestTimeoutMs
+    : undefined;
+
+  // Fetch all workspaces in parallel
+  const fetchResults = await Promise.allSettled(
+    allConfigs.map(async (cfg) => {
+      const result = await queryOpenCodeGoQuota(cfg.workspaceId, cfg.authCookie, {
+        requestTimeoutMs,
+      });
+      return { config: cfg, result };
+    }),
+  );
+
+  // Collect entries and errors
+  const allEntries: QuotaToastEntry[] = [];
+  const allErrors: Array<{ label: string; message: string }> = [];
+  let anySuccess = false;
+
+  for (const settled of fetchResults) {
+    if (settled.status === "rejected") {
+      allErrors.push({
+        label: OPENCODE_GO_PROVIDER_LABEL,
+        message: `Unexpected error: ${settled.reason instanceof Error ? settled.reason.message : String(settled.reason)}`,
+      });
+      continue;
+    }
+
+    const { config: cfg, result } = settled.value;
+
+    if (!result) continue;
+
+    if (!result.success) {
+      allErrors.push({
+        label: isMulti
+          ? `${OPENCODE_GO_PROVIDER_LABEL} (${cfg.label || cfg.workspaceId})`
+          : OPENCODE_GO_PROVIDER_LABEL,
+        message: result.error,
+      });
+      continue;
+    }
+
+    anySuccess = true;
+    const { groupLabel, entryPrefix } = workspaceDisplayNames(cfg, isMulti);
+    const entries = buildOpenCodeGoEntries(result, windows, groupLabel, entryPrefix);
+
+    // Check for missing windows in this workspace's result
+    const missingSelectedWindows = windows.filter((window) => !result[window]);
+    if (missingSelectedWindows.length > 0 && !isDefaultOpenCodeGoWindowSelection(windows)) {
+      allErrors.push({
+        label: groupLabel,
+        message: `Selected OpenCode Go dashboard window(s) missing: ${formatMissingWindowList(missingSelectedWindows)}`,
+      });
+    }
+
+    if (entries.length > 0) {
+      allEntries.push(...entries);
+    }
+  }
+
+  if (!anySuccess && allEntries.length === 0) {
+    // If we have specific errors, return them; otherwise not attempted
+    if (allErrors.length > 0) {
+      return { attempted: true, entries: [], errors: allErrors };
+    }
+    return notAttemptedResult();
+  }
+
+  return attemptedResult(allEntries, allErrors.length > 0 ? allErrors : undefined);
+}

@@ -7,9 +7,10 @@ import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from ".
 import { writeJsonAtomic } from "./atomic-json.js";
 import { getOpencodeRuntimeDirs } from "./opencode-runtime-paths.js";
 import { isLiveLocalUsageProviderId } from "./provider-metadata.js";
+import { isResolvedAuthIdentity, type ResolvedAuthIdentity } from "./resolved-auth-identity.js";
 import { getPackageVersion } from "./version.js";
 
-const QUOTA_PROVIDER_CACHE_VERSION = 1 as const;
+const QUOTA_PROVIDER_CACHE_VERSION = 2 as const;
 const QUOTA_PROVIDER_CACHE_PACKAGE_VERSION_FALLBACK = "unknown";
 const QUOTA_PROVIDER_CACHE_DIRNAME = "quota-provider-state";
 const QUOTA_PROVIDER_CACHE_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -40,6 +41,7 @@ export function cloneQuotaProviderResult(result: QuotaProviderResult): QuotaProv
 export function buildQuotaProviderStateCacheKey(
   providerId: string,
   ctx: QuotaProviderContext,
+  identity?: ResolvedAuthIdentity,
 ): string {
   const googleModels = ctx.config.googleModels.join(",");
   const alibabaCodingPlanTier = ctx.config.alibabaCodingPlanTier;
@@ -52,16 +54,47 @@ export function buildQuotaProviderStateCacheKey(
   const currentProviderID = ctx.config.currentProviderID ?? "";
   const anthropicBinaryPath = ctx.config.anthropicBinaryPath ?? "";
 
-  return `${providerId}|anthropicBinaryPath=${anthropicBinaryPath}|googleModels=${googleModels}|alibabaTier=${alibabaCodingPlanTier}|cursorPlan=${cursorPlan}|cursorIncludedApiUsd=${cursorIncludedApiUsd}|cursorBillingCycleStartDay=${cursorBillingCycleStartDay}|opencodeGoWindows=${opencodeGoWindows}|onlyCurrentModel=${onlyCurrentModel}|currentModel=${currentModel}|currentProviderID=${currentProviderID}`;
+  return `${providerId}|anthropicBinaryPath=${anthropicBinaryPath}|googleModels=${googleModels}|alibabaTier=${alibabaCodingPlanTier}|cursorPlan=${cursorPlan}|cursorIncludedApiUsd=${cursorIncludedApiUsd}|cursorBillingCycleStartDay=${cursorBillingCycleStartDay}|opencodeGoWindows=${opencodeGoWindows}|onlyCurrentModel=${onlyCurrentModel}|currentModel=${currentModel}|currentProviderID=${currentProviderID}${identity ? `|resolvedAuthIdentity=${identity}` : ""}`;
 }
 
 function getQuotaProviderCacheDir(): string {
   return join(getOpencodeRuntimeDirs().cacheDir, QUOTA_PROVIDER_CACHE_DIRNAME);
 }
 
+export function getQuotaProviderCacheLocator(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+async function prepareCacheScope(
+  provider: QuotaProvider,
+  ctx: QuotaProviderContext,
+): Promise<{
+  identity?: ResolvedAuthIdentity;
+  fetch: () => Promise<QuotaProviderResult>;
+} | null> {
+  if (provider.cachePolicy?.kind === "account-neutral") return { fetch: () => provider.fetch(ctx) };
+  if (provider.cachePolicy?.kind !== "resolved-auth") return null;
+  try {
+    const scope = await provider.cachePolicy.prepare(ctx);
+    return scope && isResolvedAuthIdentity(scope.identity) && typeof scope.fetch === "function"
+      ? scope
+      : null;
+  } catch {
+    // Identity/storage failure must never authorize reuse of an ambiguous snapshot.
+    return null;
+  }
+}
+
+function cachePathForLocator(providerId: string, locator: string): string {
+  const stem = /^[a-z0-9][a-z0-9_-]{0,127}$/iu.test(providerId)
+    ? providerId
+    : `provider-${getQuotaProviderCacheLocator(providerId)}`;
+  return join(getQuotaProviderCacheDir(), `${stem}-${locator}.json`);
+}
+
 export function getQuotaProviderStateCacheFilePath(providerId: string, key: string): string {
-  const digest = createHash("sha1").update(key).digest("hex");
-  return join(getQuotaProviderCacheDir(), `${providerId}-${digest}.json`);
+  const digest = getQuotaProviderCacheLocator(key);
+  return cachePathForLocator(providerId, digest);
 }
 
 function isQuotaProviderPresentation(value: unknown): boolean {
@@ -140,7 +173,7 @@ function isPersistedQuotaProviderCacheEntry(
   return (
     entry.version === QUOTA_PROVIDER_CACHE_VERSION &&
     entry.packageVersion === packageVersion &&
-    entry.key === key &&
+    entry.key === getQuotaProviderCacheLocator(key) &&
     entry.providerId === providerId &&
     typeof entry.timestamp === "number" &&
     isQuotaProviderResult(entry.result) &&
@@ -238,7 +271,7 @@ async function writePersistedQuotaProviderCacheEntry(
   entry: PersistedQuotaProviderCacheEntry,
 ): Promise<void> {
   try {
-    await writeJsonAtomic(getQuotaProviderStateCacheFilePath(entry.providerId, entry.key), entry, {
+    await writeJsonAtomic(cachePathForLocator(entry.providerId, entry.key), entry, {
       trailingNewline: true,
     });
   } catch {
@@ -258,7 +291,9 @@ export async function fetchQuotaProviderResult(params: {
     return cloneQuotaProviderResult(await provider.fetch(ctx));
   }
 
-  const key = buildQuotaProviderStateCacheKey(provider.id, ctx);
+  const scope = await prepareCacheScope(provider, ctx);
+  if (!scope) return cloneQuotaProviderResult(await provider.fetch(ctx));
+  const key = buildQuotaProviderStateCacheKey(provider.id, ctx, scope.identity);
   const now = Date.now();
   const packageVersion = await getQuotaProviderCachePackageVersion();
   await maybePrunePersistedQuotaProviderCache(now);
@@ -293,8 +328,12 @@ export async function fetchQuotaProviderResult(params: {
     return cloneQuotaProviderResult(persisted.result);
   }
 
+  // Another caller may have published pending work while disk I/O was awaited.
+  const pendingAfterDiskRead = inFlightByKey.get(key);
+  if (pendingAfterDiskRead) return cloneQuotaProviderResult(await pendingAfterDiskRead);
+
   const fetchPromise = (async () => {
-    const fetched = await provider.fetch(ctx);
+    const fetched = await scope.fetch();
     const snapshot = cloneQuotaProviderResult(fetched);
 
     if (!snapshot.attempted) {
@@ -310,7 +349,7 @@ export async function fetchQuotaProviderResult(params: {
     const entry: PersistedQuotaProviderCacheEntry = {
       version: QUOTA_PROVIDER_CACHE_VERSION,
       packageVersion,
-      key,
+      key: getQuotaProviderCacheLocator(key),
       providerId: provider.id,
       timestamp: Date.now(),
       result: cloneQuotaProviderResult(snapshot),
@@ -339,7 +378,9 @@ export async function readCachedProviderResult(params: {
   ctx: QuotaProviderContext;
   ttlMs: number;
 }): Promise<CachedProviderRead> {
-  const key = buildQuotaProviderStateCacheKey(params.provider.id, params.ctx);
+  const scope = await prepareCacheScope(params.provider, params.ctx);
+  if (!scope) return { hit: false };
+  const key = buildQuotaProviderStateCacheKey(params.provider.id, params.ctx, scope.identity);
   const now = Date.now();
 
   // Check in-memory cache first.

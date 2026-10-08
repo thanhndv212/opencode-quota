@@ -14,6 +14,8 @@ import { attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
 export const qwenCodeProvider: QuotaProvider = {
   id: "qwen-code",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     const plan = await resolveQwenLocalPlanCached({

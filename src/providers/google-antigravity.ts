@@ -6,10 +6,7 @@ import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from ".
 import type { GoogleModelId } from "../lib/types.js";
 import { hasAntigravityQuotaRuntimeAvailable, queryGoogleQuota } from "../lib/google.js";
 import { modelProviderIncludesAny } from "../lib/provider-model-matching.js";
-import {
-  formatGoogleAccountErrors,
-  formatGoogleAccountLabel,
-} from "./google-account-format.js";
+import { formatGoogleAccountErrors, formatGoogleAccountLabel } from "./google-account-format.js";
 import { attemptedErrorResult, attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
 async function isAccountsConfigured(): Promise<boolean> {
@@ -22,6 +19,8 @@ async function isAccountsConfigured(): Promise<boolean> {
 
 export const googleAntigravityProvider: QuotaProvider = {
   id: "google-antigravity",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     // Google quota depends on both the accounts file and the separately
@@ -48,7 +47,8 @@ export const googleAntigravityProvider: QuotaProvider = {
     }
 
     const entries = result.models.map((m) => {
-      const emailLabel = formatGoogleAccountLabel(m.accountEmail, "fixedGmailHint") || "Antigravity";
+      const emailLabel =
+        formatGoogleAccountLabel(m.accountEmail, "fixedGmailHint") || "Antigravity";
       return {
         name: `${m.displayName} (${emailLabel})`,
         group: m.displayName,
@@ -58,10 +58,8 @@ export const googleAntigravityProvider: QuotaProvider = {
       };
     });
 
-    return attemptedResult(
-      entries,
-      formatGoogleAccountErrors(result.errors, "fixedGmailHint"),
-      { classicStrategy: "preserve" },
-    );
+    return attemptedResult(entries, formatGoogleAccountErrors(result.errors, "fixedGmailHint"), {
+      classicStrategy: "preserve",
+    });
   },
 };

@@ -37,10 +37,20 @@ export {
   type ChutesKeySource,
 } from "./chutes-config.js";
 
-export async function queryChutesQuota(options: { requestTimeoutMs?: number } = {}): Promise<ChutesResult> {
+export async function queryChutesQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<ChutesResult> {
   const resolved = await resolveChutesApiKey();
   if (!resolved) return null;
 
+  return queryChutesQuotaWithAuth(resolved, options);
+}
+
+/** Fetch using the credential selected for this cache transaction. */
+export async function queryChutesQuotaWithAuth(
+  resolved: { key: string },
+  options: { requestTimeoutMs?: number } = {},
+): ReturnType<typeof queryChutesQuota> {
   try {
     const resp = await fetchWithTimeout(
       CHUTES_QUOTA_URL,

@@ -4,7 +4,7 @@ Prepared: 2026-10-06. Status: execution started. See the live delivery tracker b
 
 ## Live delivery tracker
 
-Updated: 2026-10-06. Parent issue: [Upstream adoption delivery](https://github.com/thanhndv212/opencode-quota/issues/3). Foundation merged in [PR #30](https://github.com/thanhndv212/opencode-quota/pull/30); correctness work continues in `fix/cor-04-session-copy-accounting`.
+Updated: 2026-10-08. Parent issue: [Upstream adoption delivery](https://github.com/thanhndv212/opencode-quota/issues/3). PRs #30–#34 are merged on `main`; the latest verified implementation is `220c1c0`. COR-02 is being implemented on `fix/cor-02-account-cache` (draft PR #35). The local rollout now covers 13 resolved-auth providers, explicitly disables shared caching for 7 providers without frozen account selection, and removes unscoped auth/rendered-toast reuse; review, merge, and green main CI remain pending. Work-item completion and remaining dependencies are shown below.
 
 | Milestone | Status      | Completion gate                                                                          |
 | --------- | ----------- | ---------------------------------------------------------------------------------------- |
@@ -19,34 +19,34 @@ Updated: 2026-10-06. Parent issue: [Upstream adoption delivery](https://github.c
 
 ### Work-item status
 
-| Item   | GitHub issue                                                   | Status      | Evidence / remaining work                                                                                               |
-| ------ | -------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------- |
-| FND-01 | [#4](https://github.com/thanhndv212/opencode-quota/issues/4)   | Done        | Tracking/protection verified; PR #30 merged; automation re-enabled; #4 closed                                           |
-| FND-02 | [#5](https://github.com/thanhndv212/opencode-quota/issues/5)   | Done        | Main CI 37504881469 green at 79fa935; #5 closed                                                                         |
-| FND-03 | [#6](https://github.com/thanhndv212/opencode-quota/issues/6)   | Done        | Main CI: Node 20/22 tarball + Linux/macOS Electron checks passed; #6 closed                                             |
-| FND-04 | [#7](https://github.com/thanhndv212/opencode-quota/issues/7)   | In progress | PR #33: Linux/macOS unsigned candidates built in run 37505462379; draft/tag and npm authentication/registration pending |
-| COR-01 | [#8](https://github.com/thanhndv212/opencode-quota/issues/8)   | Done        | PR #32 merged after six CI checks; whole-response deadline verified on real HTTP fixtures                               |
-| COR-02 | [#9](https://github.com/thanhndv212/opencode-quota/issues/9)   | Planned     | Cross-account/process tests                                                                                             |
-| COR-03 | [#10](https://github.com/thanhndv212/opencode-quota/issues/10) | In progress | PR #34: recovery and availability/desktop regressions pass; 429 cooldown evidence remains                               |
-| COR-04 | [#11](https://github.com/thanhndv212/opencode-quota/issues/11) | Done        | PR #31 merged after all six CI checks; source/sync/multiplicity fixtures passed                                         |
-| COR-05 | [#12](https://github.com/thanhndv212/opencode-quota/issues/12) | Planned     | Legacy/current payload contracts                                                                                        |
-| GUI-01 | [#13](https://github.com/thanhndv212/opencode-quota/issues/13) | Planned     | Config parity scenarios                                                                                                 |
-| GUI-02 | [#14](https://github.com/thanhndv212/opencode-quota/issues/14) | Planned     | Clock + packaged app evidence                                                                                           |
-| GUI-03 | [#15](https://github.com/thanhndv212/opencode-quota/issues/15) | Planned     | Persistence + alert-window tests                                                                                        |
-| ACC-01 | [#16](https://github.com/thanhndv212/opencode-quota/issues/16) | Planned     | Semantic row contract tests                                                                                             |
-| ACC-02 | [#17](https://github.com/thanhndv212/opencode-quota/issues/17) | Planned     | Migration/rollback fixtures                                                                                             |
-| ACC-03 | [#18](https://github.com/thanhndv212/opencode-quota/issues/18) | Planned     | Shared data parity and UI evidence                                                                                      |
-| INS-01 | [#19](https://github.com/thanhndv212/opencode-quota/issues/19) | Planned     | Concurrent/restart deduplication                                                                                        |
-| INS-02 | [#20](https://github.com/thanhndv212/opencode-quota/issues/20) | Planned     | OS + channel-policy evidence                                                                                            |
-| INS-03 | [#21](https://github.com/thanhndv212/opencode-quota/issues/21) | Planned     | Independent calculation fixtures                                                                                        |
-| PRO-01 | [#22](https://github.com/thanhndv212/opencode-quota/issues/22) | Planned     | Auth/parser/surface contract                                                                                            |
-| PRO-02 | [#23](https://github.com/thanhndv212/opencode-quota/issues/23) | Planned     | Per-provider evidence checklist                                                                                         |
-| CUS-01 | [#24](https://github.com/thanhndv212/opencode-quota/issues/24) | Planned     | Schema + mapping + request tests                                                                                        |
-| CUS-02 | [#25](https://github.com/thanhndv212/opencode-quota/issues/25) | Planned     | Idempotent counters/pricing tests                                                                                       |
-| CUS-03 | [#26](https://github.com/thanhndv212/opencode-quota/issues/26) | Planned     | JSONC diff/write/rollback tests                                                                                         |
-| OBS-01 | [#27](https://github.com/thanhndv212/opencode-quota/issues/27) | Optional    | No-request/no-exporter tests                                                                                            |
-| V2-01  | [#28](https://github.com/thanhndv212/opencode-quota/issues/28) | Deferred    | Compatibility decision record                                                                                           |
-| V2-02+ | [#29](https://github.com/thanhndv212/opencode-quota/issues/29) | Deferred    | Host matrix + migration evidence                                                                                        |
+| Item   | GitHub issue                                                   | Status      | Evidence / remaining work                                                                                                           |
+| ------ | -------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| FND-01 | [#4](https://github.com/thanhndv212/opencode-quota/issues/4)   | Done        | Tracking/protection verified; PR #30 merged; automation re-enabled; #4 closed                                                       |
+| FND-02 | [#5](https://github.com/thanhndv212/opencode-quota/issues/5)   | Done        | Main CI 37504881469 green at 79fa935; #5 closed                                                                                     |
+| FND-03 | [#6](https://github.com/thanhndv212/opencode-quota/issues/6)   | Done        | Main CI: Node 20/22 tarball + Linux/macOS Electron checks passed; #6 closed                                                         |
+| FND-04 | [#7](https://github.com/thanhndv212/opencode-quota/issues/7)   | In progress | PR #33: Linux/macOS unsigned candidates built in run 37505462379; draft/tag and npm authentication/registration pending             |
+| COR-01 | [#8](https://github.com/thanhndv212/opencode-quota/issues/8)   | Done        | PR #32 merged after six CI checks; whole-response deadline verified on real HTTP fixtures                                           |
+| COR-02 | [#9](https://github.com/thanhndv212/opencode-quota/issues/9)   | In progress | Local rollout: 13 resolved-auth / 7 explicitly uncached providers; auth and outer-toast reuse removed; review/merge/main CI pending |
+| COR-03 | [#10](https://github.com/thanhndv212/opencode-quota/issues/10) | In progress | PR #34: recovery and availability/desktop regressions pass; 429 cooldown evidence remains                                           |
+| COR-04 | [#11](https://github.com/thanhndv212/opencode-quota/issues/11) | Done        | PR #31 merged after all six CI checks; source/sync/multiplicity fixtures passed                                                     |
+| COR-05 | [#12](https://github.com/thanhndv212/opencode-quota/issues/12) | Planned     | Legacy/current payload contracts                                                                                                    |
+| GUI-01 | [#13](https://github.com/thanhndv212/opencode-quota/issues/13) | Planned     | Config parity scenarios                                                                                                             |
+| GUI-02 | [#14](https://github.com/thanhndv212/opencode-quota/issues/14) | Planned     | Clock + packaged app evidence                                                                                                       |
+| GUI-03 | [#15](https://github.com/thanhndv212/opencode-quota/issues/15) | Planned     | Persistence + alert-window tests                                                                                                    |
+| ACC-01 | [#16](https://github.com/thanhndv212/opencode-quota/issues/16) | Planned     | Semantic row contract tests                                                                                                         |
+| ACC-02 | [#17](https://github.com/thanhndv212/opencode-quota/issues/17) | Planned     | Migration/rollback fixtures                                                                                                         |
+| ACC-03 | [#18](https://github.com/thanhndv212/opencode-quota/issues/18) | Planned     | Shared data parity and UI evidence                                                                                                  |
+| INS-01 | [#19](https://github.com/thanhndv212/opencode-quota/issues/19) | Planned     | Concurrent/restart deduplication                                                                                                    |
+| INS-02 | [#20](https://github.com/thanhndv212/opencode-quota/issues/20) | Planned     | OS + channel-policy evidence                                                                                                        |
+| INS-03 | [#21](https://github.com/thanhndv212/opencode-quota/issues/21) | Planned     | Independent calculation fixtures                                                                                                    |
+| PRO-01 | [#22](https://github.com/thanhndv212/opencode-quota/issues/22) | Planned     | Auth/parser/surface contract                                                                                                        |
+| PRO-02 | [#23](https://github.com/thanhndv212/opencode-quota/issues/23) | Planned     | Per-provider evidence checklist                                                                                                     |
+| CUS-01 | [#24](https://github.com/thanhndv212/opencode-quota/issues/24) | Planned     | Schema + mapping + request tests                                                                                                    |
+| CUS-02 | [#25](https://github.com/thanhndv212/opencode-quota/issues/25) | Planned     | Idempotent counters/pricing tests                                                                                                   |
+| CUS-03 | [#26](https://github.com/thanhndv212/opencode-quota/issues/26) | Planned     | JSONC diff/write/rollback tests                                                                                                     |
+| OBS-01 | [#27](https://github.com/thanhndv212/opencode-quota/issues/27) | Optional    | No-request/no-exporter tests                                                                                                        |
+| V2-01  | [#28](https://github.com/thanhndv212/opencode-quota/issues/28) | Deferred    | Compatibility decision record                                                                                                       |
+| V2-02+ | [#29](https://github.com/thanhndv212/opencode-quota/issues/29) | Deferred    | Host matrix + migration evidence                                                                                                    |
 
 Milestones are closed on GitHub and marked Done here only when every required item passes its acceptance gate. A merged PR without remaining platform/registry evidence does not complete the milestone.
 
@@ -57,6 +57,8 @@ Milestones are closed on GitHub and marked Done here only when every required it
 - Real macOS Electron 42.5.0 smoke passes from an isolated installed tarball: preload API, six tabs, version, manual refresh, hidden-window tray refresh, quit. Provider IPC is fixture-backed; this does not establish live provider correctness or DMG installation.
 - Local suite baseline after initial foundation changes: 129 files / 1,276 tests passed. Final PR checks supersede this intermediate result.
 - Installed OpenCode reports 1.18.10; actual host command validation remains unverified.
+
+- COR-02 local rollout (2026-10-08): Node 22.23.3/pnpm 10.0.0 typecheck, 134 Vitest files / 1,336 passing tests, installed-tarball build check, real separate-process A/B cache/restart smoke, and installed-tarball macOS Electron smoke passed. Provider requests in these checks are fixture-backed. Coverage and explicitly uncached providers are documented in `COR02_CACHE_DESIGN.md`; no merge/main-CI or live-provider completion is claimed.
 
 ## 1. Outcome and approach
 
@@ -126,24 +128,116 @@ Do not promise downstream GUI support merely because a feature works in the upst
 
 ## 4. Dependency map and release slices
 
+The implementation foundation is complete: FND-01, FND-02, and FND-03. M0 remains open because FND-04 still needs release/publisher and host/installation evidence. That release gate does **not** block correctness or desktop implementation.
+
+### Milestone and release dependencies
+
 ```mermaid
 flowchart TD
-  M0[M0: CI and release foundation] --> M1[M1: Correctness backports]
-  M0 --> M2[M2: Desktop runtime reliability]
-  M1 --> M3[M3: Structured accounting and identity]
+  FND["Foundation: FND-01–03 DONE"] --> M1["M1: Correctness IN PROGRESS"]
+  FND --> M2["M2: Desktop reliability PLANNED"]
+  FND --> PUB["M0 remaining: FND-04 release gates OPEN"]
+  M1 --> M3["M3: Accounting PLANNED"]
   M2 --> M3
-  M3 --> M4[M4: Notifications and exhaustion estimates]
-  M3 --> M5[M5: Providers and custom definitions]
-  M3 --> M7[M7: Optional monitoring]
-  M0 --> M6A[M6 spike: OpenCode 2 compatibility]
-  M6A --> M6[M6: Separate OpenCode 2 migration]
-  M4 --> R2[Desktop feature release]
-  M5 --> R3[Extensibility release]
-  M1 --> R1[Reliability release]
+  M3 --> M4["M4: Insights PLANNED"]
+  M3 --> M5["M5: Extensibility PLANNED"]
+  M3 -.-> M7["M7: Monitoring OPTIONAL"]
+  FND -.-> SPIKE["M6: V2-01 compatibility spike DEFERRED"]
+  SPIKE --> V2["M6: Separate migration DEFERRED"]
+  M1 --> R1["R1: Reliability release"]
   M2 --> R1
+  PUB --> R1
+  M4 --> R2["R2: Desktop insight release"]
+  R1 --> R2
+  M5 --> R3["R3: Extensibility release"]
+  R1 --> R3
+  V2 --> R4["R4: Separate host release"]
+  PUB --> R4
+  classDef done fill:#d1fae5,stroke:#047857,color:#064e3b;
+  classDef active fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef optional fill:#f3f4f6,stroke:#6b7280,color:#374151;
+  class FND done;
+  class M1,PUB active;
+  class M7,SPIKE,V2 optional;
 ```
 
-Milestone numbering is a workstream identifier, not a claim that all seven are mandatory. M6 and M7 can remain deferred. Work in independent areas may overlap after interfaces are agreed, but shared-file PRs should merge in dependency order.
+Solid arrows represent prerequisite completion for the milestone or release gate. Dashed arrows identify optional/deferred workstreams. Milestone gates summarize integration and release readiness; individual tasks may start earlier according to the work-item map below. M6 and M7 are not prerequisites for R1–R3. R2 and R3 build on the R1 baseline, but their implementation can overlap once the required contracts are stable.
+
+### Work-item dependency map
+
+This map follows the issue-backlog dependency table. Green nodes are completed; amber nodes are partially delivered/open; blue nodes have all implementation prerequisites completed and can start now. Remaining nodes wait for their listed prerequisites. V2-01 is technically unblocked but remains a deferred product decision.
+
+```mermaid
+flowchart LR
+  subgraph Foundation
+    F01["FND-01 DONE"]
+    F02["FND-02 DONE"] --> F03["FND-03 DONE"]
+    F03 --> F04["FND-04 OPEN"]
+  end
+  subgraph Correctness
+    F02 --> C01["COR-01 DONE"]
+    F02 --> C02["COR-02 IN PROGRESS"]
+    C02 --> C03["COR-03 PARTIAL"]
+    F02 --> C04["COR-04 DONE"]
+    C01 --> C05["COR-05 READY"]
+  end
+  subgraph Desktop
+    F03 --> G01["GUI-01 READY"]
+    G01 --> G02["GUI-02"]
+    C03 --> G02
+    G02 --> G03["GUI-03"]
+    C04 --> G03
+  end
+  subgraph Accounting
+    C02 --> A01["ACC-01"]
+    C05 --> A01
+    A01 --> A02["ACC-02"]
+    G03 --> A02
+    A01 --> A03["ACC-03"]
+    A02 --> A03
+  end
+  subgraph Insights
+    A02 --> I01["INS-01"]
+    I01 --> I02["INS-02"]
+    G02 --> I02
+    A03 --> I03["INS-03"]
+  end
+  subgraph Extensibility
+    A03 --> P01["PRO-01"]
+    C01 --> P01
+    P01 --> P02["PRO-02"]
+    A01 --> U01["CUS-01"]
+    C01 --> U01
+    C02 --> U01
+    U01 --> U02["CUS-02"]
+    C04 --> U02
+    U01 --> U03["CUS-03"]
+  end
+  A01 -.-> O01["OBS-01 OPTIONAL"]
+  F03 -.-> V01["V2-01 DEFERRED"]
+  V01 --> V02["V2-02+ DECISION-GATED"]
+  classDef done fill:#d1fae5,stroke:#047857,color:#064e3b;
+  classDef active fill:#fef3c7,stroke:#b45309,color:#78350f;
+  classDef ready fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+  classDef optional fill:#f3f4f6,stroke:#6b7280,color:#374151;
+  class F01,F02,F03,C01,C04 done;
+  class F04,C02,C03 active;
+  class C05,G01 ready;
+  class O01,V01,V02 optional;
+```
+
+### Current delivery order
+
+| Lane                      | Next work                                        | Dependency / exit gate                                                                                                                                       |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Correctness / identity    | COR-02 (#9), then finish COR-03 (#10)            | Account-safe cache integration plus remaining 429 cooldown evidence; PR #34 already delivered shared-cache recovery and failure diagnostics                  |
+| Provider payloads         | COR-05 (#12)                                     | COR-01 is done; legacy/current payload contracts remain to be verified                                                                                       |
+| Desktop configuration     | GUI-01 (#13)                                     | FND-03 is done; proceed with effective standalone settings and config parity                                                                                 |
+| Desktop refresh / history | GUI-02 (#14), then GUI-03 (#15)                  | GUI-02 needs GUI-01 + completed COR-03; GUI-03 also needs COR-04, already done                                                                               |
+| Accounting                | ACC-01 (#16), then ACC-02 (#17) and ACC-03 (#18) | ACC-01 needs COR-02 + COR-05; ACC-02 also needs GUI-03                                                                                                       |
+| Release preparation       | Finish FND-04 (#7) alongside implementation      | Version/tag-aligned draft, npm authentication/publisher setup, and remaining host/installation evidence; unsigned artifact builds/checksums already verified |
+
+COR-02 is in progress; COR-05 and GUI-01 remain independently ready. Shared-file PRs still merge in order and rerun required checks against the current base. COR-03's completed portions do not close its remaining gate. Milestone numbering identifies workstreams; a milestone is marked done only when all its acceptance gates pass.
 
 | Release slice        | Included scope                             | Exit condition                                                                                      |
 | -------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------- |
@@ -362,7 +456,7 @@ Owner: maintainer/product owner chooses scope and compatibility. Implementer own
 
 ### Issue backlog and PR sequence
 
-IDs below are planning identifiers, not actual GitHub issue numbers. Split a row further if its reviewable diff spans unrelated behavior.
+IDs below are stable planning identifiers; the live tracker maps them to actual GitHub issues. Dependencies are work-item completion gates, consistent with the map in section 4. Split a row further if its reviewable diff spans unrelated behavior.
 
 | ID     | Proposed issue / PR title                              | Depends on             | Completion evidence                   |
 | ------ | ------------------------------------------------------ | ---------------------- | ------------------------------------- |
@@ -614,7 +708,7 @@ A work item is done when its observable acceptance criteria pass; relevant unit/
 
 A release slice is done when its exact artifacts have been installed and exercised on declared platforms, upgrade and rollback work, the release record distinguishes live/fixture/unverified coverage, and the maintainer has promoted those artifacts through the fork's intended distribution channel.
 
-The immediate next implementation slice is FND-02 + FND-03, with FND-01/FND-04 governance and distribution decisions alongside it. The first user-visible feature slice after reliability is reset notifications plus eligible exhaustion estimates.
+The next delivery gate is COR-02 review, merge, and green main CI; finish COR-03 cooldown evidence afterward. COR-05 and GUI-01 are independently ready, while FND-04 release evidence continues alongside implementation. FND-01–03 are already complete. The first user-visible feature slice after reliability is reset notifications plus eligible exhaustion estimates.
 
 ## 19. Reference links
 

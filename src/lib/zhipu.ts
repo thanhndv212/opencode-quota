@@ -8,21 +8,28 @@
 import { clampPercent } from "./format-utils.js";
 import { sanitizeDisplaySnippet, sanitizeDisplayText } from "./display-sanitize.js";
 import { fetchWithTimeout } from "./http.js";
-import type {
-  ZaiResult,
-  ZaiQuotaResponse,
-} from "./types.js";
+import type { ZaiResult, ZaiQuotaResponse } from "./types.js";
 import { resolveZhipuAuthCached } from "./zhipu-auth.js";
 
 const ZHIPU_QUOTA_URL = "https://bigmodel.cn/api/monitor/usage/quota/limit";
 
-export async function queryZhipuQuota(options: { requestTimeoutMs?: number } = {}): Promise<ZaiResult> {
+export async function queryZhipuQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<ZaiResult> {
   const auth = await resolveZhipuAuthCached();
   if (auth.state === "none") return null;
   if (auth.state === "invalid") {
     return { success: false, error: auth.error };
   }
 
+  return queryZhipuQuotaWithAuth(auth, options);
+}
+
+/** Fetch using the credential selected for this cache transaction. */
+export async function queryZhipuQuotaWithAuth(
+  auth: { apiKey: string },
+  options: { requestTimeoutMs?: number } = {},
+): ReturnType<typeof queryZhipuQuota> {
   try {
     const headers: Record<string, string> = {
       Authorization: auth.apiKey,

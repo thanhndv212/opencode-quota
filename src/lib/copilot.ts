@@ -31,11 +31,7 @@ const COPILOT_QUOTA_CONFIG_FILENAME = "copilot-quota-token.json";
 const USER_AGENT = "opencode-quota/copilot-billing";
 
 type GitHubRestAuthScheme = "bearer" | "token";
-type CopilotAuthKeyName =
-  | "github-copilot"
-  | "copilot"
-  | "copilot-chat"
-  | "github-copilot-chat";
+type CopilotAuthKeyName = "github-copilot" | "copilot" | "copilot-chat" | "github-copilot-chat";
 type CopilotPatTokenKind = "github_pat" | "ghp" | "ghu" | "ghs" | "other";
 type EffectiveCopilotAuthSource = "pat" | "oauth" | "none";
 type CopilotQuotaApi = "github_billing_api" | "copilot_internal_user" | "none";
@@ -371,8 +367,7 @@ function resolvePatBillingTarget(config: CopilotQuotaConfig): {
   if (config.organization || config.enterprise) {
     return {
       target: null,
-      error:
-        `Copilot ${config.tier} usage is user-scoped. Remove "organization"/"enterprise" from copilot-quota-token.json or switch to a managed tier.`,
+      error: `Copilot ${config.tier} usage is user-scoped. Remove "organization"/"enterprise" from copilot-quota-token.json or switch to a managed tier.`,
     };
   }
 
@@ -400,9 +395,7 @@ function validatePatTargetCompatibility(
   }
 
   if (tokenKind === "ghu" || tokenKind === "ghs") {
-    return (
-      "GitHub's enterprise premium usage endpoint does not support GitHub App user or installation access tokens."
-    );
+    return "GitHub's enterprise premium usage endpoint does not support GitHub App user or installation access tokens.";
   }
 
   return null;
@@ -538,7 +531,9 @@ function selectCopilotAuth(authData: AuthData | null): {
   return { auth: null, keyName: null };
 }
 
-export function getCopilotQuotaAuthDiagnostics(authData: AuthData | null): CopilotQuotaAuthDiagnostics {
+export function getCopilotQuotaAuthDiagnostics(
+  authData: AuthData | null,
+): CopilotQuotaAuthDiagnostics {
   const pat = readQuotaConfigWithMeta();
   const { auth, keyName } = selectCopilotAuth(authData);
   const resolvedPatTarget =
@@ -589,9 +584,7 @@ export function getCopilotQuotaAuthDiagnostics(authData: AuthData | null): Copil
         : quotaApi === "copilot_internal_user",
     remainingTotalsState: getRemainingTotalsStateForTarget(billingTarget),
     queryPeriod:
-      billingTarget && billingTarget.scope !== "user"
-        ? billingTarget.billingPeriod
-        : undefined,
+      billingTarget && billingTarget.scope !== "user" ? billingTarget.billingPeriod : undefined,
     usernameFilter: pat.state === "valid" ? pat.config?.username : undefined,
     billingTargetError: pat.state === "valid" ? resolvedPatTarget.error : undefined,
     tokenCompatibilityError: tokenCompatibilityError ?? undefined,
@@ -731,7 +724,9 @@ async function fetchPremiumRequestUsage(params: {
     params.target.scope === "user"
       ? {
           scope: "user",
-          username: params.target.username ?? (await resolveGitHubUsername(params.token, params.requestTimeoutMs)),
+          username:
+            params.target.username ??
+            (await resolveGitHubUsername(params.token, params.requestTimeoutMs)),
         }
       : params.target;
 
@@ -771,7 +766,10 @@ async function fetchPremiumRequestUsage(params: {
   throw new Error("Unable to fetch Copilot premium request usage");
 }
 
-async function fetchCopilotInternalUser(token: string, requestTimeoutMs?: number): Promise<unknown> {
+async function fetchCopilotInternalUser(
+  token: string,
+  requestTimeoutMs?: number,
+): Promise<unknown> {
   const result = await fetchGitHubRestJsonOnce<unknown>(
     COPILOT_INTERNAL_USER_URL,
     token,
@@ -900,7 +898,13 @@ function toUserQuotaResultFromCopilotInternal(response: unknown): CopilotQuotaRe
     };
   }
 
-  if (!Number.isFinite(total) || total === undefined || total <= 0 || used === undefined || used < 0) {
+  if (
+    !Number.isFinite(total) ||
+    total === undefined ||
+    total <= 0 ||
+    used === undefined ||
+    used < 0
+  ) {
     throw new Error(
       "GitHub /copilot_internal/user response did not include usable personal quota fields.",
     );
@@ -982,11 +986,7 @@ function getPremiumUsageItems(
 function sumUsedUnits(items: BillingUsageItem[]): number {
   return items.reduce((sum, item) => {
     const used =
-      item.grossQuantity ??
-      item.gross_quantity ??
-      item.netQuantity ??
-      item.net_quantity ??
-      0;
+      item.grossQuantity ?? item.gross_quantity ?? item.netQuantity ?? item.net_quantity ?? 0;
     return sum + (typeof used === "number" ? used : 0);
   }, 0);
 }
@@ -1016,7 +1016,12 @@ function toUserQuotaResultFromBilling(
     .map((item) => item.limit)
     .filter((limit): limit is number => typeof limit === "number" && limit > 0);
 
-  const total = apiLimits.length > 0 ? Math.max(...apiLimits) : fallbackTier ? COPILOT_PLAN_LIMITS[fallbackTier] : undefined;
+  const total =
+    apiLimits.length > 0
+      ? Math.max(...apiLimits)
+      : fallbackTier
+        ? COPILOT_PLAN_LIMITS[fallbackTier]
+        : undefined;
 
   if (!total || total <= 0) {
     throw new Error(
@@ -1083,9 +1088,48 @@ function toQuotaError(message: string): QuotaError {
  *
  * PAT configuration wins over OpenCode OAuth auth when both are present.
  */
-export async function queryCopilotQuota(options: { requestTimeoutMs?: number } = {}): Promise<CopilotResult> {
+export async function queryCopilotQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<CopilotResult> {
   const pat = readQuotaConfigWithMeta();
 
+  const oauth = pat.state === "absent" ? selectCopilotAuth(await readAuthFile()).auth : undefined;
+  const accessToken = oauth ? (oauth.access?.trim() ?? "") : undefined;
+  return queryCopilotQuotaWithAuth(pat, accessToken, options);
+}
+
+/** Select PAT scope or OAuth once, before deriving an account cache identity. */
+export async function prepareCopilotQuotaQuery(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<{
+  credential: string;
+  qualifiers: string[];
+  query: () => Promise<CopilotResult>;
+} | null> {
+  const pat = readQuotaConfigWithMeta();
+  if (pat.state === "invalid") return null;
+  if (pat.state === "valid" && pat.config) {
+    const { token, ...target } = pat.config;
+    return {
+      credential: token,
+      qualifiers: ["pat", JSON.stringify(target)],
+      query: () => queryCopilotQuotaWithAuth(pat, undefined, options),
+    };
+  }
+  const accessToken = selectCopilotAuth(await readAuthFile()).auth?.access?.trim();
+  if (!accessToken) return null;
+  return {
+    credential: accessToken,
+    qualifiers: ["oauth"],
+    query: () => queryCopilotQuotaWithAuth(pat, accessToken, options),
+  };
+}
+
+async function queryCopilotQuotaWithAuth(
+  pat: CopilotPatReadResult,
+  accessToken: string | undefined,
+  options: { requestTimeoutMs?: number },
+): Promise<CopilotResult> {
   if (pat.state === "invalid") {
     return toQuotaError(
       `Invalid copilot-quota-token.json: ${pat.error ?? "unknown error"}${pat.selectedPath ? ` (${pat.selectedPath})` : ""}`,
@@ -1138,13 +1182,7 @@ export async function queryCopilotQuota(options: { requestTimeoutMs?: number } =
     }
   }
 
-  const authData = await readAuthFile();
-  const { auth } = selectCopilotAuth(authData);
-  if (!auth) {
-    return null;
-  }
-
-  const accessToken = auth.access?.trim();
+  if (accessToken === undefined) return null;
   if (!accessToken) {
     return toQuotaError(
       "Copilot OAuth auth is configured but missing an access token required for GitHub /copilot_internal/user.",

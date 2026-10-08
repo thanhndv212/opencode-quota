@@ -179,8 +179,7 @@ function parseNanoGptUsage(payload: unknown): NanoGptSubscription {
   return {
     active: typeof data.active === "boolean" ? data.active : false,
     state: getNonEmptyString(data.state) ?? (data.active ? "active" : "unknown"),
-    enforceDailyLimit:
-      typeof data.enforceDailyLimit === "boolean" ? data.enforceDailyLimit : false,
+    enforceDailyLimit: typeof data.enforceDailyLimit === "boolean" ? data.enforceDailyLimit : false,
     daily,
     monthly,
     currentPeriodEndIso,
@@ -213,8 +212,7 @@ async function fetchNanoGptUsage(
   headers: Record<string, string>,
   requestTimeoutMs?: number,
 ): Promise<
-  | { success: true; subscription: NanoGptSubscription }
-  | { success: false; message: string }
+  { success: true; subscription: NanoGptSubscription } | { success: false; message: string }
 > {
   try {
     const response = await fetchWithTimeout(
@@ -248,10 +246,7 @@ async function fetchNanoGptUsage(
 async function fetchNanoGptBalance(
   headers: Record<string, string>,
   requestTimeoutMs?: number,
-): Promise<
-  | { success: true; balance: NanoGptBalance }
-  | { success: false; message: string }
-> {
+): Promise<{ success: true; balance: NanoGptBalance } | { success: false; message: string }> {
   try {
     const response = await fetchWithTimeout(
       NANOGPT_BALANCE_URL,
@@ -302,10 +297,20 @@ export function formatNanoGptBalanceValue(balance: {
   return null;
 }
 
-export async function queryNanoGptQuota(options: { requestTimeoutMs?: number } = {}): Promise<NanoGptResult> {
+export async function queryNanoGptQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<NanoGptResult> {
   const resolved = await resolveNanoGptApiKey();
   if (!resolved) return null;
 
+  return queryNanoGptQuotaWithAuth(resolved, options);
+}
+
+/** Fetch using the credential selected for this cache transaction. */
+export async function queryNanoGptQuotaWithAuth(
+  resolved: { key: string },
+  options: { requestTimeoutMs?: number } = {},
+): ReturnType<typeof queryNanoGptQuota> {
   const headers = {
     "x-api-key": resolved.key,
     "User-Agent": USER_AGENT,

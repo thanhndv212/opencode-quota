@@ -41,6 +41,9 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Account cache process isolation
+        run: pnpm run smoke:account-cache
+
       - name: Pack
         run: |
           mkdir -p package-artifacts

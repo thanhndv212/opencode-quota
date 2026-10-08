@@ -2,13 +2,20 @@
  * NanoGPT provider wrapper.
  */
 
+import { resolveNanoGptApiKey } from "../lib/nanogpt-config.js";
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import { queryNanoGptQuotaWithAuth } from "../lib/nanogpt.js";
 import type {
   QuotaProvider,
   QuotaProviderContext,
   QuotaProviderResult,
   QuotaToastEntry,
 } from "../lib/entries.js";
-import { formatNanoGptBalanceValue, hasNanoGptApiKeyConfigured, queryNanoGptQuota } from "../lib/nanogpt.js";
+import {
+  formatNanoGptBalanceValue,
+  hasNanoGptApiKeyConfigured,
+  queryNanoGptQuota,
+} from "../lib/nanogpt.js";
 import { modelProviderMatchesRuntimeId } from "../lib/provider-model-matching.js";
 import { attemptedResult, mapNullableProviderResult } from "./result-helpers.js";
 
@@ -89,6 +96,12 @@ function mapNanoGptSuccess(result: NanoGptQuotaSuccess): QuotaProviderResult {
 export const nanoGptProvider: QuotaProvider = {
   id: "nanogpt",
 
+  cachePolicy: createResolvedAuthCachePolicy("nanogpt", async (ctx) => {
+    const auth = await resolveNanoGptApiKey();
+    if (!auth) return null;
+    return { credential: auth.key, fetch: () => fetchWithAuth(ctx, auth) };
+  }),
+
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     return await hasNanoGptApiKeyConfigured();
   },
@@ -97,12 +110,19 @@ export const nanoGptProvider: QuotaProvider = {
     return modelProviderMatchesRuntimeId(model, "nanogpt");
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryNanoGptQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
-
-    return mapNullableProviderResult(result, {
-      errorLabel: "NanoGPT",
-      onSuccess: mapNanoGptSuccess,
-    });
-  },
+  fetch: fetchWithAuth,
 };
+
+async function fetchWithAuth(
+  ctx: QuotaProviderContext,
+  auth?: { key: string },
+): Promise<QuotaProviderResult> {
+  const result = auth
+    ? await queryNanoGptQuotaWithAuth(auth, { requestTimeoutMs: ctx.config?.requestTimeoutMs })
+    : await queryNanoGptQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
+
+  return mapNullableProviderResult(result, {
+    errorLabel: "NanoGPT",
+    onSuccess: mapNanoGptSuccess,
+  });
+}

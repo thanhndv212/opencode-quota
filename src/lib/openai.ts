@@ -155,7 +155,8 @@ export function resolveOpenAIOAuth(auth: AuthData | null | undefined): ResolvedO
   }
 
   const email = getEmailFromJwt(resolved.accessToken) ?? undefined;
-  const accountId = getAccountIdFromJwt(resolved.accessToken) ?? resolved.entry.accountId ?? undefined;
+  const accountId =
+    getAccountIdFromJwt(resolved.accessToken) ?? resolved.entry.accountId ?? undefined;
 
   return {
     state: "configured",
@@ -175,22 +176,30 @@ export function hasOpenAIOAuth(auth: AuthData | null | undefined): boolean {
   return resolveOpenAIOAuth(auth).state === "configured";
 }
 
-export async function hasOpenAIOAuthCached(params?: {
-  maxAgeMs?: number;
-}): Promise<boolean> {
+export async function hasOpenAIOAuthCached(params?: { maxAgeMs?: number }): Promise<boolean> {
   const auth = await readAuthFileCached({
     maxAgeMs: Math.max(0, params?.maxAgeMs ?? DEFAULT_OPENAI_AUTH_CACHE_MAX_AGE_MS),
   });
   return hasOpenAIOAuth(auth);
 }
 
-export async function queryOpenAIQuota(options: { requestTimeoutMs?: number } = {}): Promise<OpenAIResult> {
+export async function queryOpenAIQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<OpenAIResult> {
   const auth = await readAuthFileCached({
     maxAgeMs: DEFAULT_OPENAI_AUTH_CACHE_MAX_AGE_MS,
   });
   const resolvedAuth = resolveOpenAIOAuth(auth);
   if (resolvedAuth.state !== "configured") return null;
 
+  return queryOpenAIQuotaWithAuth(resolvedAuth, options);
+}
+
+/** Fetch with the same access token and account header used for cache identity. */
+export async function queryOpenAIQuotaWithAuth(
+  resolvedAuth: Extract<ResolvedOpenAIOAuth, { state: "configured" }>,
+  options: { requestTimeoutMs?: number } = {},
+): Promise<OpenAIResult> {
   if (resolvedAuth.expiresAt && resolvedAuth.expiresAt < Date.now()) {
     return { success: false, error: "Token expired" };
   }

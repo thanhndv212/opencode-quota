@@ -9,19 +9,12 @@
 import { readFile } from "fs/promises";
 import { join } from "path";
 
-import { getOpencodeRuntimeDirCandidates, getOpencodeRuntimeDirs } from "./opencode-runtime-paths.js";
+import {
+  getOpencodeRuntimeDirCandidates,
+  getOpencodeRuntimeDirs,
+} from "./opencode-runtime-paths.js";
 
 import type { AuthData } from "./types.js";
-
-const DEFAULT_AUTH_CACHE_MAX_AGE_MS = 5_000;
-
-type AuthCacheEntry = {
-  timestamp: number;
-  value: AuthData | null;
-  inFlight?: Promise<AuthData | null>;
-};
-
-let authCache: AuthCacheEntry | null = null;
 
 /**
  * Get candidate auth.json paths in priority order.
@@ -57,43 +50,15 @@ export async function readAuthFile(): Promise<AuthData | null> {
 }
 
 /**
- * Cached auth reader for frequently triggered code paths (e.g. per-question hooks).
- * This avoids repeated filesystem reads while keeping auth updates visible quickly.
+ * Compatibility entry point. Auth is read fresh on every call so login changes,
+ * logout, and runtime-root changes cannot reuse a previous account's credentials.
+ * Quota results are cached separately after resolving the selected credential.
  */
-export async function readAuthFileCached(params?: { maxAgeMs?: number }): Promise<AuthData | null> {
-  const maxAgeMs = Math.max(0, params?.maxAgeMs ?? DEFAULT_AUTH_CACHE_MAX_AGE_MS);
-  const now = Date.now();
-
-  if (authCache && now - authCache.timestamp <= maxAgeMs) {
-    return authCache.value;
-  }
-
-  if (authCache?.inFlight) {
-    return authCache.inFlight;
-  }
-
-  const inFlight = (async () => {
-    const value = await readAuthFile();
-    authCache = { timestamp: Date.now(), value };
-    return value;
-  })();
-
-  authCache = {
-    timestamp: authCache?.timestamp ?? 0,
-    value: authCache?.value ?? null,
-    inFlight,
-  };
-
-  try {
-    return await inFlight;
-  } finally {
-    if (authCache?.inFlight === inFlight) {
-      authCache.inFlight = undefined;
-    }
-  }
+export async function readAuthFileCached(_params?: {
+  maxAgeMs?: number;
+}): Promise<AuthData | null> {
+  return readAuthFile();
 }
 
-/** Test helper to clear cached auth state between test cases. */
-export function clearReadAuthFileCacheForTests(): void {
-  authCache = null;
-}
+/** Retained for callers that reset auth state in tests; no auth snapshot is kept. */
+export function clearReadAuthFileCacheForTests(): void {}

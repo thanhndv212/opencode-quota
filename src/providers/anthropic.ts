@@ -10,10 +10,7 @@ import type {
   QuotaProviderResult,
   QuotaToastEntry,
 } from "../lib/entries.js";
-import {
-  hasAnthropicCredentialsConfigured,
-  queryAnthropicQuota,
-} from "../lib/anthropic.js";
+import { hasAnthropicCredentialsConfigured, queryAnthropicQuota } from "../lib/anthropic.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
 import { attemptedErrorResult, attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
@@ -23,6 +20,8 @@ export function getAnthropicNoDataMessage(): string {
 
 export const anthropicProvider: QuotaProvider = {
   id: "anthropic",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     const providerAvailable = await isCanonicalProviderAvailable({

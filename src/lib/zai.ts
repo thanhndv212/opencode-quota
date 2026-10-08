@@ -24,13 +24,23 @@ type ZaiQuotaApiResponse = {
   success?: boolean;
 };
 
-export async function queryZaiQuota(options: { requestTimeoutMs?: number } = {}): Promise<ZaiResult> {
+export async function queryZaiQuota(
+  options: { requestTimeoutMs?: number } = {},
+): Promise<ZaiResult> {
   const auth = await resolveZaiAuthCached();
   if (auth.state === "none") return null;
   if (auth.state === "invalid") {
     return { success: false, error: auth.error };
   }
 
+  return queryZaiQuotaWithAuth(auth, options);
+}
+
+/** Fetch using the credential selected for this cache transaction. */
+export async function queryZaiQuotaWithAuth(
+  auth: { apiKey: string },
+  options: { requestTimeoutMs?: number } = {},
+): ReturnType<typeof queryZaiQuota> {
   try {
     const headers: Record<string, string> = {
       Authorization: auth.apiKey,
@@ -52,7 +62,8 @@ export async function queryZaiQuota(options: { requestTimeoutMs?: number } = {})
       const msg = typeof data.msg === "string" ? sanitizeDisplayText(data.msg) : "";
       return {
         success: false,
-        error: msg || (typeof data.code === "number" ? `Z.ai API error ${data.code}` : "Z.ai API error"),
+        error:
+          msg || (typeof data.code === "number" ? `Z.ai API error ${data.code}` : "Z.ai API error"),
       };
     }
 

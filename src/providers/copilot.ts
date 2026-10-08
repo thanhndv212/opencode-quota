@@ -4,13 +4,12 @@
  * Normalizes Copilot quota into generic toast entries.
  */
 
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import { prepareCopilotQuotaQuery } from "../lib/copilot.js";
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
 import { hasCopilotQuotaRuntimeAvailable, queryCopilotQuota } from "../lib/copilot.js";
 import { isCanonicalProviderAvailable } from "../lib/provider-availability.js";
-import {
-  modelIncludesAny,
-  modelProviderIncludesAny,
-} from "../lib/provider-model-matching.js";
+import { modelIncludesAny, modelProviderIncludesAny } from "../lib/provider-model-matching.js";
 import type { CopilotEnterpriseUsageResult, CopilotOrganizationUsageResult } from "../lib/types.js";
 import { attemptedErrorResult, attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
@@ -40,6 +39,17 @@ function formatManagedUsageValue(
 
 export const copilotProvider: QuotaProvider = {
   id: "copilot",
+  cachePolicy: createResolvedAuthCachePolicy("copilot", async (ctx) => {
+    const selected = await prepareCopilotQuotaQuery({
+      requestTimeoutMs: ctx.config.requestTimeoutMs,
+    });
+    if (!selected) return null;
+    return {
+      credential: selected.credential,
+      qualifiers: selected.qualifiers,
+      fetch: async () => mapCopilotResult(await selected.query()),
+    };
+  }),
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     const providerAvailable = await isCanonicalProviderAvailable({
@@ -68,67 +78,73 @@ export const copilotProvider: QuotaProvider = {
     return modelIncludesAny(model, ["copilot", "github-copilot"]);
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryCopilotQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
+  async fetch(ctx) {
+    return mapCopilotResult(
+      await queryCopilotQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs }),
+    );
+  },
+};
 
-    if (!result) {
-      return notAttemptedResult();
-    }
+function mapCopilotResult(
+  result: Awaited<ReturnType<typeof queryCopilotQuota>>,
+): QuotaProviderResult {
+  if (!result) {
+    return notAttemptedResult();
+  }
 
-    if (!result.success) {
-      return attemptedErrorResult("Copilot", result.error);
-    }
+  if (!result.success) {
+    return attemptedErrorResult("Copilot", result.error);
+  }
 
-    if (result.mode === "organization_usage" || result.mode === "enterprise_usage") {
-      return attemptedResult(
-        [
-          {
-            kind: "value",
-            name: "Copilot",
-            group: getCopilotGroup(result.mode),
-            label: "Usage:",
-            value: formatManagedUsageValue(result),
-            resetTimeIso: result.resetTimeIso,
-          },
-        ],
-        [],
-        {
-          singleWindowDisplayName:
-            result.mode === "enterprise_usage"
-              ? `Copilot Enterprise (${result.enterprise})`
-              : `Copilot Org (${result.organization})`,
-        },
-      );
-    }
-
-    if (result.unlimited) {
-      return attemptedResult(
-        [
-          {
-            kind: "value",
-            name: "Copilot",
-            group: getCopilotGroup(result.mode),
-            label: "Quota:",
-            value: "Unlimited",
-            resetTimeIso: result.resetTimeIso,
-          },
-        ],
-        [],
-      );
-    }
-
+  if (result.mode === "organization_usage" || result.mode === "enterprise_usage") {
     return attemptedResult(
       [
         {
+          kind: "value",
+          name: "Copilot",
+          group: getCopilotGroup(result.mode),
+          label: "Usage:",
+          value: formatManagedUsageValue(result),
+          resetTimeIso: result.resetTimeIso,
+        },
+      ],
+      [],
+      {
+        singleWindowDisplayName:
+          result.mode === "enterprise_usage"
+            ? `Copilot Enterprise (${result.enterprise})`
+            : `Copilot Org (${result.organization})`,
+      },
+    );
+  }
+
+  if (result.unlimited) {
+    return attemptedResult(
+      [
+        {
+          kind: "value",
           name: "Copilot",
           group: getCopilotGroup(result.mode),
           label: "Quota:",
-          right: `${result.used}/${result.total}`,
-          percentRemaining: result.percentRemaining,
+          value: "Unlimited",
           resetTimeIso: result.resetTimeIso,
         },
       ],
       [],
     );
-  },
-};
+  }
+
+  return attemptedResult(
+    [
+      {
+        name: "Copilot",
+        group: getCopilotGroup(result.mode),
+        label: "Quota:",
+        right: `${result.used}/${result.total}`,
+        percentRemaining: result.percentRemaining,
+        resetTimeIso: result.resetTimeIso,
+      },
+    ],
+    [],
+  );
+}

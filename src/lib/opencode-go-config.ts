@@ -65,8 +65,12 @@ async function readConfigFile(path: string): Promise<ReadConfigFileResult> {
 function isValidWorkspaceConfig(obj: unknown): obj is OpenCodeGoConfig {
   if (!obj || typeof obj !== "object") return false;
   const c = obj as Record<string, unknown>;
-  return typeof c.workspaceId === "string" && c.workspaceId.trim().length > 0
-      && typeof c.authCookie === "string" && c.authCookie.trim().length > 0;
+  return (
+    typeof c.workspaceId === "string" &&
+    c.workspaceId.trim().length > 0 &&
+    typeof c.authCookie === "string" &&
+    c.authCookie.trim().length > 0
+  );
 }
 
 function normalizeWorkspaceConfig(raw: Record<string, unknown>): OpenCodeGoConfig | null {
@@ -209,8 +213,10 @@ export async function resolveOpenCodeGoConfig(): Promise<ResolvedOpenCodeGoConfi
     }
 
     // File loaded but no valid config found — check for incomplete fields
-    const workspaceId = typeof fileResult.config.workspaceId === "string" ? fileResult.config.workspaceId.trim() : "";
-    const authCookie = typeof fileResult.config.authCookie === "string" ? fileResult.config.authCookie.trim() : "";
+    const workspaceId =
+      typeof fileResult.config.workspaceId === "string" ? fileResult.config.workspaceId.trim() : "";
+    const authCookie =
+      typeof fileResult.config.authCookie === "string" ? fileResult.config.authCookie.trim() : "";
     const missing = !workspaceId ? "workspaceId (and no workspaces array)" : "authCookie";
     return { state: "incomplete", source: path, missing };
   }
@@ -222,23 +228,14 @@ export async function resolveOpenCodeGoConfig(): Promise<ResolvedOpenCodeGoConfi
 // Cache
 // =============================================================================
 
-let cachedConfig: ResolvedOpenCodeGoConfig | null = null;
-let cachedAt = 0;
-
 const DEFAULT_CACHE_MAX_AGE_MS = 30_000;
 export { DEFAULT_CACHE_MAX_AGE_MS as DEFAULT_OPENCODE_GO_CONFIG_CACHE_MAX_AGE_MS };
 
-export async function resolveOpenCodeGoConfigCached(params?: {
+/** Compatibility wrapper: credential-bearing config is always resolved fresh. */
+export async function resolveOpenCodeGoConfigCached(_params?: {
   maxAgeMs?: number;
 }): Promise<ResolvedOpenCodeGoConfig> {
-  const maxAgeMs = Math.max(0, params?.maxAgeMs ?? DEFAULT_CACHE_MAX_AGE_MS);
-  const now = Date.now();
-  if (cachedConfig && now - cachedAt < maxAgeMs) {
-    return cachedConfig;
-  }
-  cachedConfig = await resolveOpenCodeGoConfig();
-  cachedAt = now;
-  return cachedConfig;
+  return resolveOpenCodeGoConfig();
 }
 
 // =============================================================================
@@ -274,12 +271,21 @@ export async function getOpenCodeGoConfigDiagnostics(): Promise<OpenCodeGoConfig
   const checkedPaths = getConfigCandidatePaths();
 
   const workspaceCount =
-    resolved.state === "configured" ? 1
-    : resolved.state === "configured_multi" ? resolved.configs.length
-    : 0;
+    resolved.state === "configured"
+      ? 1
+      : resolved.state === "configured_multi"
+        ? resolved.configs.length
+        : 0;
 
   if (resolved.state === "none") {
-    return { state: "none", source: null, missing: null, error: null, checkedPaths, workspaceCount };
+    return {
+      state: "none",
+      source: null,
+      missing: null,
+      error: null,
+      checkedPaths,
+      workspaceCount,
+    };
   }
 
   if (resolved.state === "incomplete") {
