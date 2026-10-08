@@ -74,6 +74,7 @@ async function fetchWithAuth(
           windows: [
             { window: result.windows.hourly, suffix: "5h", label: "5h:" },
             { window: result.windows.weekly, suffix: "Weekly", label: "Weekly:" },
+            { window: result.windows.monthly, suffix: "Monthly", label: "Monthly:" },
             { window: result.windows.codeReview, suffix: "Code Review", label: "Code Review:" },
           ],
         }),

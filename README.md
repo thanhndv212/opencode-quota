@@ -768,6 +768,32 @@ best = max(
 
 ## Provider setup notes
 
+<details>
+<summary><strong>GitHub Copilot credits and billing</strong></summary>
+
+OpenCode OAuth supplies the personal quota snapshot. Legacy premium-interaction payloads remain supported. Token-billing placeholders show the plan with quota details unavailable; over-limit snapshots retain GitHub's reported usage and remaining percentage.
+
+For billing reports, put `copilot-quota-token.json` in the trusted OpenCode runtime config directory shown by `opencode debug paths`:
+
+```json
+{
+  "token": "YOUR_GITHUB_PAT",
+  "tier": "pro",
+  "username": "YOUR_GITHUB_LOGIN",
+  "billingModel": "ai_credits"
+}
+```
+
+PAT config takes precedence over OAuth, including when invalid. The default `billingModel` is `ai_credits`, including for existing config files that omit it. No config file is rewritten. Eligible Pro/Pro+ legacy annual-plan reporting requires explicit `"billingModel": "legacy_premium_requests"`; other tiers are rejected for this legacy mode. To roll back reporting selection, restore the previous package/config together.
+
+AI Credit reports show total usage, included consumption and billed usage when supplied or derivable from complete quantity pairs. Missing breakdowns and incomplete billed dollar totals stay unknown. The report does not provide an included-credit limit, so no remaining percentage is inferred from the plan name. Managed organization/enterprise reports may also query the applicable dollar budget; it is shown separately from credits. A failed budget request leaves usage visible with a warning.
+
+Use `"tier": "business"` plus `"organization"` for organization reports, or `"tier": "enterprise"` plus `"enterprise"` for enterprise reports. Optional `"username"` and `"organization"` filter managed usage. Enterprise billing requires a classic PAT with billing access. GHE.com routing uses a validated `"enterpriseUrl": "YOUR_SUBDOMAIN.ghe.com"` bound to the selected PAT/OAuth credential; arbitrary hosts and URL credentials are rejected.
+
+OpenAI subscription windows use exact durations: 18,000 seconds (5h), 604,800 (weekly), and 2,628,000 (monthly). Unknown durations and conflicting duplicate windows are omitted; absent limits do not create quota rows.
+
+</details>
+
 <a id="anthropic-claude"></a>
 
 <details>
@@ -976,7 +1002,7 @@ Run `/quota_status` and check the Anthropic section.
 <details>
 <summary><strong>GitHub Copilot</strong></summary>
 
-Run `/quota_status` and check `copilot_quota_auth`, `billing_mode`, `billing_scope`, and `quota_api`.
+Run `/quota_status` and check `copilot_quota_auth`, `billing_model`, `billing_mode`, `billing_scope`, `quota_api`, and `budget_api`.
 
 | Symptom                              | Fix                                                                                                                                         |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
