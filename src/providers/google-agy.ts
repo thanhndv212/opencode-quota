@@ -1,10 +1,7 @@
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
 import { hasAgyQuotaRuntimeAvailable, queryGoogleAgyQuota } from "../lib/google-agy.js";
 import { parseProviderModelRef } from "../lib/provider-model-matching.js";
-import {
-  formatGoogleAccountErrors,
-  formatGoogleAccountLabel,
-} from "./google-account-format.js";
+import { formatGoogleAccountErrors, formatGoogleAccountLabel } from "./google-account-format.js";
 import { attemptedErrorResult, attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
 function isAgyModel(model: string): boolean {
@@ -29,6 +26,8 @@ async function isAgyConfigured(ctx: QuotaProviderContext): Promise<boolean> {
 
 export const googleAgyProvider: QuotaProvider = {
   id: "google-agy",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     return await isAgyConfigured(ctx);
@@ -53,7 +52,7 @@ export const googleAgyProvider: QuotaProvider = {
       return attemptedErrorResult("Google AGY", result.error);
     }
 
-    const groupedBuckets = new Map<string, typeof result.buckets[0]>();
+    const groupedBuckets = new Map<string, (typeof result.buckets)[0]>();
 
     for (const bucket of result.buckets) {
       let groupName: string | undefined;
@@ -76,8 +75,8 @@ export const googleAgyProvider: QuotaProvider = {
       }
     }
 
-    const finalBuckets = Array.from(groupedBuckets.values()).sort((a, b) => 
-      a.displayName.localeCompare(b.displayName)
+    const finalBuckets = Array.from(groupedBuckets.values()).sort((a, b) =>
+      a.displayName.localeCompare(b.displayName),
     );
 
     const entries = finalBuckets.map((bucket) => {

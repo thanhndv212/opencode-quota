@@ -17,7 +17,6 @@ import { fetchWithTimeout } from "./http.js";
 
 const DEFAULT_CLAUDE_BINARY = "claude";
 const CLAUDE_COMMAND_TIMEOUT_MS = 3_000;
-const ANTHROPIC_DIAGNOSTICS_TTL_MS = 5_000;
 const ANTHROPIC_USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const ANTHROPIC_BETA_HEADER = "oauth-2025-04-20";
 const CLAUDE_CODE_CREDENTIALS_SERVICE = "Claude Code-credentials";
@@ -77,13 +76,7 @@ export interface AnthropicDiagnostics {
 export interface AnthropicProbeOptions {
   binaryPath?: string;
   requestTimeoutMs?: number;
-  /**
-   * Skip the (normally 5s) diagnostics cache and re-probe the CLI right now.
-   * Needed so a manual "Refresh" can see a `claude auth login` that just
-   * happened without waiting out the cache or relaunching the app - the
-   * outer per-provider result cache (quota-state.ts) already has its own
-   * bypass flag, but that doesn't reach this module's own internal cache.
-   */
+  /** Compatibility flag; unscoped diagnostics are now always probed fresh. */
   bypassCache?: boolean;
 }
 
@@ -102,12 +95,6 @@ export type ClaudeCommandInvocation = {
   display: string;
 };
 
-type AnthropicDiagnosticsCacheEntry = {
-  timestamp: number;
-  value: AnthropicDiagnostics | null;
-  inFlight?: Promise<AnthropicDiagnostics>;
-};
-
 type AnthropicLocalDiagnostics = {
   installed: boolean;
   version: string | null;
@@ -115,12 +102,6 @@ type AnthropicLocalDiagnostics = {
   checkedCommands: string[];
   message?: string;
   localQuota?: AnthropicQuotaResult;
-};
-
-type AnthropicLocalDiagnosticsCacheEntry = {
-  timestamp: number;
-  value: AnthropicLocalDiagnostics | null;
-  inFlight?: Promise<AnthropicLocalDiagnostics>;
 };
 
 type ClaudeCredentialsAccess =
@@ -164,9 +145,6 @@ type ParsedAuthProbe = {
   unsupportedCommand?: boolean;
 };
 
-const diagnosticsCache = new Map<string, AnthropicDiagnosticsCacheEntry>();
-const localDiagnosticsCache = new Map<string, AnthropicLocalDiagnosticsCacheEntry>();
-
 export function resolveAnthropicBinaryPath(binaryPath?: string): string {
   const trimmed = binaryPath?.trim();
   return trimmed ? trimmed : DEFAULT_CLAUDE_BINARY;
@@ -182,7 +160,7 @@ function formatCommandDisplay(parts: string[]): string {
 }
 
 function quoteWindowsCmdArg(value: string): string {
-  const escaped = value.replace(/(\\*)"/g, "$1$1\\\"").replace(/(\\+)$/g, "$1$1");
+  const escaped = value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1");
   return `"${escaped}"`;
 }
 
@@ -290,7 +268,9 @@ function getWindowResetTimeIso(window: Record<string, unknown>): string | undefi
   );
 }
 
-function parseQuotaWindow(window: unknown): { percentRemaining: number; resetTimeIso?: string } | null {
+function parseQuotaWindow(
+  window: unknown,
+): { percentRemaining: number; resetTimeIso?: string } | null {
   const record = asRecord(window);
   if (!record) {
     return null;
@@ -390,11 +370,7 @@ function extractClaudeCredentialsAccessToken(data: unknown): string {
     return "";
   }
 
-  for (const candidate of [
-    asRecord(root["claudeAiOauth"]),
-    asRecord(root["oauth"]),
-    root,
-  ]) {
+  for (const candidate of [asRecord(root["claudeAiOauth"]), asRecord(root["oauth"]), root]) {
     if (!candidate) {
       continue;
     }
@@ -793,8 +769,7 @@ function parseClaudeAuthStatusResult(result: ClaudeCommandResult): ParsedAuthPro
     return {
       authStatus: "unknown",
       unsupportedCommand: true,
-      message:
-        "Claude CLI authentication status JSON is unavailable in this version of Claude.",
+      message: "Claude CLI authentication status JSON is unavailable in this version of Claude.",
     };
   }
 
@@ -953,163 +928,72 @@ async function probeAnthropicLocalDiagnostics(
   };
 }
 
-export function clearAnthropicDiagnosticsCacheForTests(): void {
-  diagnosticsCache.clear();
-  localDiagnosticsCache.clear();
-}
+/** Compatibility helper; unscoped CLI/auth diagnostic snapshots are no longer retained. */
+export function clearAnthropicDiagnosticsCacheForTests(): void {}
 
-async function getCachedAnthropicLocalDiagnostics(
+async function getAnthropicLocalDiagnostics(
   options: AnthropicProbeOptions = {},
 ): Promise<AnthropicLocalDiagnostics> {
-  const binaryPath = resolveAnthropicBinaryPath(options.binaryPath);
-  const now = Date.now();
-  const cached = localDiagnosticsCache.get(binaryPath) ?? {
-    timestamp: 0,
-    value: null,
-  };
-
-  if (
-    !options.bypassCache &&
-    cached.value &&
-    cached.timestamp > 0 &&
-    now - cached.timestamp < ANTHROPIC_DIAGNOSTICS_TTL_MS
-  ) {
-    return cached.value;
-  }
-
-  if (cached.inFlight) {
-    // A probe already in flight is inherently fresh - join it instead of
-    // spawning a duplicate `claude` subprocess, even when bypassing cache.
-    return cached.inFlight;
-  }
-
-  const inFlight = probeAnthropicLocalDiagnostics({ binaryPath }).then((value) => {
-    localDiagnosticsCache.set(binaryPath, {
-      timestamp: Date.now(),
-      value,
-    });
-    return value;
+  // The CLI can change accounts independently of this process. Without a
+  // verifiable account snapshot, neither results nor in-flight probes are shared.
+  return probeAnthropicLocalDiagnostics({
+    binaryPath: resolveAnthropicBinaryPath(options.binaryPath),
   });
-
-  localDiagnosticsCache.set(binaryPath, {
-    timestamp: cached.timestamp,
-    value: cached.value,
-    inFlight,
-  });
-
-  try {
-    return await inFlight;
-  } finally {
-    const latest = localDiagnosticsCache.get(binaryPath);
-    if (latest?.inFlight === inFlight) {
-      localDiagnosticsCache.set(binaryPath, {
-        timestamp: latest.timestamp,
-        value: latest.value,
-      });
-    }
-  }
 }
 
 export async function getAnthropicDiagnostics(
   options: AnthropicProbeOptions = {},
 ): Promise<AnthropicDiagnostics> {
   const binaryPath = resolveAnthropicBinaryPath(options.binaryPath);
-  const now = Date.now();
-  const cached = diagnosticsCache.get(binaryPath) ?? {
-    timestamp: 0,
-    value: null,
-  };
-
-  if (
-    !options.bypassCache &&
-    cached.value &&
-    cached.timestamp > 0 &&
-    now - cached.timestamp < ANTHROPIC_DIAGNOSTICS_TTL_MS
-  ) {
-    return cached.value;
+  const localDiagnostics = await getAnthropicLocalDiagnostics({
+    binaryPath,
+    bypassCache: options.bypassCache,
+  });
+  if (localDiagnostics.authStatus !== "authenticated" || localDiagnostics.localQuota) {
+    return mapLocalDiagnosticsToAnthropicDiagnostics(localDiagnostics);
   }
 
-  if (cached.inFlight) {
-    // A probe already in flight is inherently fresh - join it instead of
-    // spawning a duplicate `claude` subprocess, even when bypassing cache.
-    return cached.inFlight;
-  }
-
-  const inFlight = (async () => {
-    const localDiagnostics = await getCachedAnthropicLocalDiagnostics({
-      binaryPath,
-      bypassCache: options.bypassCache,
-    });
-    if (localDiagnostics.authStatus !== "authenticated" || localDiagnostics.localQuota) {
-      return mapLocalDiagnosticsToAnthropicDiagnostics(localDiagnostics);
-    }
-
-    const credentials = await readClaudeCredentialsAccessToken();
-    if (credentials.state !== "configured") {
-      const diagnostics: AnthropicDiagnostics = {
-        installed: localDiagnostics.installed,
-        version: localDiagnostics.version,
-        authStatus: localDiagnostics.authStatus,
-        quotaSupported: false,
-        quotaSource: "none",
-        checkedCommands: localDiagnostics.checkedCommands,
-        message: buildAnthropicNoQuotaDiagnosticsMessage(credentials.detail),
-      };
-      return diagnostics;
-    }
-
-    const fallbackQuota = await queryAnthropicQuotaFromOAuthAccessToken(
-      credentials.accessToken,
-      options.requestTimeoutMs,
-    );
-    if (fallbackQuota.state !== "success") {
-      const diagnostics: AnthropicDiagnostics = {
-        installed: localDiagnostics.installed,
-        version: localDiagnostics.version,
-        authStatus: localDiagnostics.authStatus,
-        quotaSupported: false,
-        quotaSource: "none",
-        checkedCommands: localDiagnostics.checkedCommands,
-        message: buildAnthropicNoQuotaDiagnosticsMessage(fallbackQuota.detail),
-      };
-      return diagnostics;
-    }
-
+  const credentials = await readClaudeCredentialsAccessToken();
+  if (credentials.state !== "configured") {
     const diagnostics: AnthropicDiagnostics = {
       installed: localDiagnostics.installed,
       version: localDiagnostics.version,
       authStatus: localDiagnostics.authStatus,
-      quotaSupported: true,
-      quotaSource: "claude-credentials-oauth-api",
+      quotaSupported: false,
+      quotaSource: "none",
       checkedCommands: localDiagnostics.checkedCommands,
-      quota: fallbackQuota.quota,
+      message: buildAnthropicNoQuotaDiagnosticsMessage(credentials.detail),
     };
     return diagnostics;
-  })().then((value) => {
-    diagnosticsCache.set(binaryPath, {
-      timestamp: Date.now(),
-      value,
-    });
-    return value;
-  });
-
-  diagnosticsCache.set(binaryPath, {
-    timestamp: cached.timestamp,
-    value: cached.value,
-    inFlight,
-  });
-
-  try {
-    return await inFlight;
-  } finally {
-    const latest = diagnosticsCache.get(binaryPath);
-    if (latest?.inFlight === inFlight) {
-      diagnosticsCache.set(binaryPath, {
-        timestamp: latest.timestamp,
-        value: latest.value,
-      });
-    }
   }
+
+  const fallbackQuota = await queryAnthropicQuotaFromOAuthAccessToken(
+    credentials.accessToken,
+    options.requestTimeoutMs,
+  );
+  if (fallbackQuota.state !== "success") {
+    const diagnostics: AnthropicDiagnostics = {
+      installed: localDiagnostics.installed,
+      version: localDiagnostics.version,
+      authStatus: localDiagnostics.authStatus,
+      quotaSupported: false,
+      quotaSource: "none",
+      checkedCommands: localDiagnostics.checkedCommands,
+      message: buildAnthropicNoQuotaDiagnosticsMessage(fallbackQuota.detail),
+    };
+    return diagnostics;
+  }
+
+  const diagnostics: AnthropicDiagnostics = {
+    installed: localDiagnostics.installed,
+    version: localDiagnostics.version,
+    authStatus: localDiagnostics.authStatus,
+    quotaSupported: true,
+    quotaSource: "claude-credentials-oauth-api",
+    checkedCommands: localDiagnostics.checkedCommands,
+    quota: fallbackQuota.quota,
+  };
+  return diagnostics;
 }
 
 export async function hasAnthropicCredentialsConfigured(
@@ -1119,7 +1003,7 @@ export async function hasAnthropicCredentialsConfigured(
     // Deliberately gate on "CLI installed" rather than "currently authenticated":
     // an expired/missing session should surface as an actionable auth error from
     // queryAnthropicQuota(), not make the provider disappear from menubar/dashboard.
-    const diagnostics = await getCachedAnthropicLocalDiagnostics(options);
+    const diagnostics = await getAnthropicLocalDiagnostics(options);
     return diagnostics.installed;
   } catch {
     return false;

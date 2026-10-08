@@ -31,6 +31,8 @@ function buildCursorApiUsageValue(params: {
 
 export const cursorProvider: QuotaProvider = {
   id: "cursor",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     const availableViaProviderConfig = await isCanonicalProviderAvailable({
@@ -67,7 +69,12 @@ export const cursorProvider: QuotaProvider = {
 
     const errors =
       usage.unknownModels.length > 0
-        ? [{ label: "Cursor", message: "Unknown Cursor model ids present in local history (see /quota_status)" }]
+        ? [
+            {
+              label: "Cursor",
+              message: "Unknown Cursor model ids present in local history (see /quota_status)",
+            },
+          ]
         : [];
     const hasPartialApiCoverage = usage.unknownModels.length > 0;
     const entries: QuotaToastEntry[] = [];
@@ -92,7 +99,8 @@ export const cursorProvider: QuotaProvider = {
               group,
               label: "API:",
               right: `${fmtUsdAmount(usage.api.costUsd)}/${fmtUsdAmount(includedApiUsd)}`,
-              percentRemaining: includedApiUsd > 0 ? 100 - (usage.api.costUsd / includedApiUsd) * 100 : 0,
+              percentRemaining:
+                includedApiUsd > 0 ? 100 - (usage.api.costUsd / includedApiUsd) * 100 : 0,
               resetTimeIso: usage.window.resetTimeIso,
             },
       );

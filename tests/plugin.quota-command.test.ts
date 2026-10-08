@@ -836,7 +836,7 @@ describe("/quota command behavior", () => {
     expect(secondOutput).toContain("95% left");
   });
 
-  it("caches rendered DeepSeek value-only toast rows", async () => {
+  it("re-resolves auth before displaying a second toast in the same session", async () => {
     mocks.loadConfig.mockResolvedValueOnce({
       ...DEFAULT_CONFIG,
       enabled: true,
@@ -850,6 +850,59 @@ describe("/quota command behavior", () => {
 
     const provider = {
       id: "deepseek",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi.fn().mockResolvedValueOnce({
+        attempted: true,
+        entries: [{ kind: "value", name: "DeepSeek Balance", value: "$12.34" }],
+        errors: [],
+      }),
+    };
+    provider.fetch.mockResolvedValueOnce({
+      attempted: true,
+      entries: [{ kind: "value", name: "DeepSeek Balance", value: "$56.78" }],
+      errors: [],
+    });
+    mocks.getProviders.mockReturnValue([provider]);
+
+    const { QuotaToastPlugin } = await import("../src/plugin.js");
+    const client = createClient({ modelID: "deepseek-chat", providerID: "deepseek" });
+    const hooks = await QuotaToastPlugin({ client } as any);
+
+    await hooks.event?.({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: "session-deepseek-value" },
+      },
+    } as any);
+    await hooks.event?.({
+      event: {
+        type: "session.idle",
+        properties: { sessionID: "session-deepseek-value" },
+      },
+    } as any);
+
+    expect(client.tui.showToast).toHaveBeenCalledTimes(2);
+    expect(getToastMessage(client, 0)).toContain("$12.34");
+    expect(getToastMessage(client, 1)).toContain("$56.78");
+    expect(provider.isAvailable).toHaveBeenCalledTimes(2);
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("reuses safe shared provider results while re-rendering value-only toast rows", async () => {
+    mocks.loadConfig.mockResolvedValueOnce({
+      ...DEFAULT_CONFIG,
+      enabled: true,
+      enabledProviders: ["deepseek"],
+      showOnIdle: true,
+      showOnCompact: false,
+      showOnQuestion: false,
+      showSessionTokens: false,
+      minIntervalMs: 60_000,
+    });
+
+    const provider = {
+      id: "deepseek",
+      cachePolicy: { kind: "account-neutral" as const },
       isAvailable: vi.fn().mockResolvedValue(true),
       fetch: vi.fn().mockResolvedValue({
         attempted: true,
@@ -879,7 +932,7 @@ describe("/quota command behavior", () => {
     expect(client.tui.showToast).toHaveBeenCalledTimes(2);
     expect(getToastMessage(client, 0)).toContain("$12.34");
     expect(getToastMessage(client, 1)).toContain("$12.34");
-    expect(provider.isAvailable).toHaveBeenCalledTimes(1);
+    expect(provider.isAvailable).toHaveBeenCalledTimes(2);
     expect(provider.fetch).toHaveBeenCalledTimes(1);
   });
 

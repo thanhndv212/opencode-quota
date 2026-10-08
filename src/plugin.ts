@@ -10,7 +10,6 @@ import type { Plugin } from "@opencode-ai/plugin";
 import type { QuotaToastConfig } from "./lib/types.js";
 import { DEFAULT_CONFIG } from "./lib/types.js";
 import { createLoadConfigMeta, type LoadConfigMeta } from "./lib/config.js";
-import { clearCache, getOrFetchWithCacheControl } from "./lib/cache.js";
 import { formatQuotaRows } from "./lib/format.js";
 import { getProviders } from "./providers/registry.js";
 import { tool } from "@opencode-ai/plugin";
@@ -84,7 +83,10 @@ async function captureDashboardSnapshotsBestEffort(
     detectAndRecordWeeklyResets(dashboardApi, providerResults);
     captureQuotaSnapshots(dashboardApi, providerResults);
     syncTodayUsageHistory(dashboardApi).catch((err) => {
-      console.error("[dashboard] Usage history sync failed:", err instanceof Error ? err.message : err);
+      console.error(
+        "[dashboard] Usage history sync failed:",
+        err instanceof Error ? err.message : err,
+      );
     });
   } catch (err) {
     console.error("[dashboard] Snapshot capture failed:", err instanceof Error ? err.message : err);
@@ -208,7 +210,6 @@ type DeferredQuotaRefreshState = {
 
 type QuotaMessageFetchResult = {
   message: string | null;
-  cacheRenderedMessage: boolean;
   retryable: boolean;
   retryReason?: DeferredQuotaRefreshReason;
   hasQuotaRows: boolean;
@@ -276,7 +277,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
   let lastSessionTokenError: SessionTokenError | undefined;
 
   const deferredQuotaRefreshes = new Map<string, DeferredQuotaRefreshState>();
-  const detectedProviderIdsByToastCacheKey = new Map<string, string[]>();
   const maintainerAnnouncementToastFallback = {
     pending: true,
     inFlight: false,
@@ -470,7 +470,10 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     trigger: string,
     detectedProviderIds: string[],
   ): void {
-    if (!maintainerAnnouncementToastFallback.pending || maintainerAnnouncementToastFallback.inFlight) {
+    if (
+      !maintainerAnnouncementToastFallback.pending ||
+      maintainerAnnouncementToastFallback.inFlight
+    ) {
       return;
     }
 
@@ -740,45 +743,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     ].join("\n");
   }
 
-  function buildToastCacheKey(params: {
-    sessionID: string;
-    sessionMeta?: SessionModelMeta;
-  }): string {
-    const formatStyle = resolveQuotaFormatStyle(config.formatStyle);
-    const enabledProviders =
-      config.enabledProviders === "auto" ? "auto" : config.enabledProviders.join(",");
-    const googleModels = config.googleModels.join(",");
-    const currentModel =
-      config.onlyCurrentModel && params.sessionID ? (params.sessionMeta?.modelID ?? "") : "";
-    const currentProviderID =
-      config.onlyCurrentModel && params.sessionID ? (params.sessionMeta?.providerID ?? "") : "";
-
-    return [
-      `sessionID=${params.sessionID}`,
-      `enabledProviders=${enabledProviders}`,
-      `formatStyle=${formatStyle}`,
-      `percentDisplayMode=${config.percentDisplayMode}`,
-      `layout=${JSON.stringify(config.layout)}`,
-      `showSessionTokens=${config.showSessionTokens ? "yes" : "no"}`,
-      `onlyCurrentModel=${config.onlyCurrentModel ? "yes" : "no"}`,
-      `currentModel=${currentModel}`,
-      `currentProviderID=${currentProviderID}`,
-      `anthropicBinaryPath=${config.anthropicBinaryPath}`,
-      `googleModels=${googleModels}`,
-      `alibabaTier=${config.alibabaCodingPlanTier}`,
-      `cursorPlan=${config.cursorPlan}`,
-      `cursorIncludedApiUsd=${config.cursorIncludedApiUsd ?? ""}`,
-      `cursorBillingCycleStartDay=${config.cursorBillingCycleStartDay ?? ""}`,
-    ].join("|");
-  }
-
-  function clearToastCacheForSession(params: {
-    sessionID: string;
-    sessionMeta?: SessionModelMeta;
-  }): void {
-    clearCache(buildToastCacheKey(params));
-  }
-
   function isProviderFetchFailureOnly(errors: Array<{ message: string }>): boolean {
     return (
       errors.length > 0 && errors.every((error) => error.message === "Failed to read quota data")
@@ -806,7 +770,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
               enabledProviders: config.enabledProviders,
             })
           : null,
-        cacheRenderedMessage: false,
         retryable: true,
         retryReason: "config_load_failed",
         hasQuotaRows: false,
@@ -819,7 +782,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         message: config.debug
           ? formatDebugInfo({ trigger: params.trigger, reason: "disabled", enabledProviders: [] })
           : null,
-        cacheRenderedMessage: false,
         retryable: false,
         hasQuotaRows: false,
         detectedProviderIds: [],
@@ -835,7 +797,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
               enabledProviders: [],
             })
           : null,
-        cacheRenderedMessage: false,
         retryable: false,
         hasQuotaRows: false,
         detectedProviderIds: [],
@@ -899,7 +860,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       const retryableNoProviders = selection?.isAutoMode === true || retryableAvailabilityFailure;
       return {
         message,
-        cacheRenderedMessage: false,
         retryable: retryableNoProviders,
         retryReason: retryableNoProviders ? "no_available_providers" : undefined,
         hasQuotaRows: false,
@@ -923,7 +883,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       if (!runtimeConfig.debug) {
         return {
           message: formatted,
-          cacheRenderedMessage: true,
           retryable: retryableMaskedProviderFailure,
           retryReason: retryableMaskedProviderFailure ? "provider_fetch_failed" : undefined,
           hasQuotaRows: true,
@@ -937,7 +896,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
 
       return {
         message: formatted + debugFooter,
-        cacheRenderedMessage: false,
         retryable: retryableMaskedProviderFailure,
         retryReason: retryableMaskedProviderFailure ? "provider_fetch_failed" : undefined,
         hasQuotaRows: true,
@@ -978,7 +936,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
           });
       return {
         message,
-        cacheRenderedMessage: false,
         retryable: retryableFailure,
         retryReason,
         hasQuotaRows: false,
@@ -1002,7 +959,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             })),
           })
         : null,
-      cacheRenderedMessage: false,
       retryable: retryableNoData,
       retryReason: providerFetchFailureOnly
         ? "provider_fetch_failed"
@@ -1096,53 +1052,22 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         sessionID,
         sessionMeta,
       });
-      const bypassMessageCache = config.debug || consumedDeferredRetry || bypassForLiveLocalUsage;
       const bypassProviderCache = consumedDeferredRetry || bypassForLiveLocalUsage;
-      const toastCacheKey = buildToastCacheKey({ sessionID, sessionMeta });
-
-      let fetchResult: QuotaMessageFetchResult | undefined;
-      const fetchForToast = () =>
-        fetchQuotaMessageResult({
-          trigger,
-          sessionID,
-          sessionMeta,
-          bypassProviderCache,
-        });
-
-      const message = bypassMessageCache
-        ? await (async () => {
-            fetchResult = await fetchForToast();
-            return fetchResult.message;
-          })()
-        : await (async () => {
-            const fetched: { result?: QuotaMessageFetchResult } = {};
-            const cachedMessage = await getOrFetchWithCacheControl(
-              toastCacheKey,
-              async () => {
-                const result = await fetchForToast();
-                fetched.result = result;
-                const cache = Boolean(
-                  result.message && result.cacheRenderedMessage && result.hasQuotaRows,
-                );
-                return { message: result.message, cache };
-              },
-              config.minIntervalMs,
-            );
-            fetchResult = fetched.result;
-            return cachedMessage;
-          })();
-
-      if (fetchResult) {
-        detectedProviderIdsByToastCacheKey.set(toastCacheKey, [
-          ...fetchResult.detectedProviderIds,
-        ]);
-        await reconcileDeferredQuotaRefresh({
-          sessionID,
-          result: fetchResult,
-          consumedDeferredRetry,
-          trigger,
-        });
-      }
+      // Rendering cannot be cached by session/config alone: auth may change while
+      // the session stays open. The shared provider cache resolves identity first.
+      const fetchResult = await fetchQuotaMessageResult({
+        trigger,
+        sessionID,
+        sessionMeta,
+        bypassProviderCache,
+      });
+      const message = fetchResult.message;
+      await reconcileDeferredQuotaRefresh({
+        sessionID,
+        result: fetchResult,
+        consumedDeferredRetry,
+        trigger,
+      });
 
       if (options.deferredRetry && fetchResult && !fetchResult.hasQuotaRows) {
         await log("Deferred quota refresh did not produce reportable data", {
@@ -1173,10 +1098,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             duration: config.toastDurationMs,
           },
         });
-        triggerMaintainerAnnouncementToastFallback(
-          trigger,
-          fetchResult?.detectedProviderIds ?? detectedProviderIdsByToastCacheKey.get(toastCacheKey) ?? [],
-        );
+        triggerMaintainerAnnouncementToastFallback(trigger, fetchResult.detectedProviderIds);
         await log("Displayed quota toast", { message, trigger });
       } catch (err) {
         await log("Failed to show toast", {
@@ -1190,7 +1112,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       }
     }
   }
-
 
   async function buildStatusReport(params: {
     refreshGoogleTokens?: boolean;
@@ -1438,7 +1359,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             const plan = await resolveQwenLocalPlanCached();
             if (plan.state === "qwen_free") {
               await recordQwenCompletion();
-              clearToastCacheForSession({ sessionID: input.sessionID, sessionMeta });
             }
           } else if (isAlibabaModelId(model)) {
             const plan = await resolveAlibabaCodingPlanAuthCached({
@@ -1447,10 +1367,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             });
             if (plan.state === "configured") {
               await recordAlibabaCodingPlanCompletion();
-              clearToastCacheForSession({ sessionID: input.sessionID, sessionMeta });
             }
-          } else if (isCursorProviderId(sessionMeta.providerID) || isCursorModelId(model)) {
-            clearToastCacheForSession({ sessionID: input.sessionID, sessionMeta });
           }
         } catch (err) {
           await log("Failed to record local request-plan quota completion", {
@@ -1459,7 +1376,6 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             providerID: sessionMeta.providerID,
           });
         }
-
       }
 
       if (config.showOnQuestion) {

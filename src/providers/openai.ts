@@ -2,6 +2,13 @@
  * OpenAI (Plus/Pro) provider wrapper.
  */
 
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import { readAuthFile } from "../lib/opencode-auth.js";
+import {
+  resolveOpenAIOAuth,
+  queryOpenAIQuotaWithAuth,
+  type ResolvedOpenAIOAuth,
+} from "../lib/openai.js";
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
 import {
   DEFAULT_OPENAI_AUTH_CACHE_MAX_AGE_MS,
@@ -18,6 +25,15 @@ import {
 
 export const openaiProvider: QuotaProvider = {
   id: "openai",
+  cachePolicy: createResolvedAuthCachePolicy("openai", async (ctx) => {
+    const auth = resolveOpenAIOAuth(await readAuthFile());
+    if (auth.state !== "configured" || (auth.expiresAt && auth.expiresAt < Date.now())) return null;
+    return {
+      credential: auth.accessToken,
+      qualifiers: [auth.accountId ?? "", auth.email ?? "", String(auth.expiresAt ?? "")],
+      fetch: () => fetchWithAuth(ctx, auth),
+    };
+  }),
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     // Best-effort: if provider lookup errors, preserve current permissive fallback.
@@ -38,26 +54,33 @@ export const openaiProvider: QuotaProvider = {
     return modelProviderIncludesAny(model, ["openai", "chatgpt", "codex"]);
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const result = await queryOpenAIQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
-
-    return mapNullableProviderResult(result, {
-      errorLabel: "OpenAI",
-      onSuccess: (result) =>
-        attemptedResult(
-          groupedPercentWindowEntries({
-            group: result.label,
-            windows: [
-              { window: result.windows.hourly, suffix: "5h", label: "5h:" },
-              { window: result.windows.weekly, suffix: "Weekly", label: "Weekly:" },
-              { window: result.windows.codeReview, suffix: "Code Review", label: "Code Review:" },
-            ],
-          }),
-          [],
-          {
-            singleWindowDisplayName: result.label,
-          },
-        ),
-    });
-  },
+  fetch: fetchWithAuth,
 };
+
+async function fetchWithAuth(
+  ctx: QuotaProviderContext,
+  auth?: Extract<ResolvedOpenAIOAuth, { state: "configured" }>,
+): Promise<QuotaProviderResult> {
+  const result = auth
+    ? await queryOpenAIQuotaWithAuth(auth, { requestTimeoutMs: ctx.config?.requestTimeoutMs })
+    : await queryOpenAIQuota({ requestTimeoutMs: ctx.config?.requestTimeoutMs });
+
+  return mapNullableProviderResult(result, {
+    errorLabel: "OpenAI",
+    onSuccess: (result) =>
+      attemptedResult(
+        groupedPercentWindowEntries({
+          group: result.label,
+          windows: [
+            { window: result.windows.hourly, suffix: "5h", label: "5h:" },
+            { window: result.windows.weekly, suffix: "Weekly", label: "Weekly:" },
+            { window: result.windows.codeReview, suffix: "Code Review", label: "Code Review:" },
+          ],
+        }),
+        [],
+        {
+          singleWindowDisplayName: result.label,
+        },
+      ),
+  });
+}

@@ -5,6 +5,8 @@
  * usage as percentage-based quota entries.
  */
 
+import { createResolvedAuthCachePolicy } from "./account-cache.js";
+import type { ResolvedOllamaCloudConfig } from "../lib/ollama-cloud-config.js";
 import type {
   QuotaProvider,
   QuotaProviderContext,
@@ -52,6 +54,11 @@ function buildOllamaCloudEntries(
 
 export const ollamaCloudProvider: QuotaProvider = {
   id: "ollama-cloud",
+  cachePolicy: createResolvedAuthCachePolicy("ollama-cloud", async (ctx) => {
+    const config = await resolveOllamaCloudConfigCached({ maxAgeMs: 0 });
+    if (config.state !== "configured") return null;
+    return { credential: config.config.cookie, fetch: () => fetchWithConfig(ctx, config) };
+  }),
 
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     const config = await resolveOllamaCloudConfigCached({
@@ -65,55 +72,58 @@ export const ollamaCloudProvider: QuotaProvider = {
     return normalizeQuotaProviderId(provider) === "ollama-cloud";
   },
 
-  async fetch(ctx: QuotaProviderContext): Promise<QuotaProviderResult> {
-    const config = await resolveOllamaCloudConfigCached({
-      maxAgeMs: DEFAULT_OLLAMA_CLOUD_CONFIG_CACHE_MAX_AGE_MS,
-    });
-
-    if (config.state === "none") {
-      return notAttemptedResult();
-    }
-
-    if (config.state === "incomplete") {
-      return attemptedErrorResult(
-        OLLAMA_CLOUD_PROVIDER_LABEL,
-        `Missing ${config.missing} (source: ${config.source})`,
-      );
-    }
-
-    if (config.state === "invalid") {
-      return attemptedErrorResult(
-        OLLAMA_CLOUD_PROVIDER_LABEL,
-        `Invalid config (${config.source}): ${config.error}`,
-      );
-    }
-
-    const result = await queryOllamaCloudQuota(config.config.cookie, {
-      requestTimeoutMs: ctx.config?.requestTimeoutMsConfigured
-        ? ctx.config.requestTimeoutMs
-        : undefined,
-    });
-
-    if (!result) {
-      return attemptedErrorResult(
-        OLLAMA_CLOUD_PROVIDER_LABEL,
-        "No response from Ollama Cloud settings page",
-      );
-    }
-
-    if (!result.success) {
-      return attemptedErrorResult(OLLAMA_CLOUD_PROVIDER_LABEL, result.error);
-    }
-
-    const entries = buildOllamaCloudEntries(result);
-
-    if (entries.length === 0) {
-      return attemptedErrorResult(
-        OLLAMA_CLOUD_PROVIDER_LABEL,
-        "No usage data found on Ollama Cloud settings page",
-      );
-    }
-
-    return attemptedResult(entries);
+  async fetch(ctx) {
+    return fetchWithConfig(ctx, await resolveOllamaCloudConfigCached({ maxAgeMs: 0 }));
   },
 };
+
+async function fetchWithConfig(
+  ctx: QuotaProviderContext,
+  config: ResolvedOllamaCloudConfig,
+): Promise<QuotaProviderResult> {
+  if (config.state === "none") {
+    return notAttemptedResult();
+  }
+
+  if (config.state === "incomplete") {
+    return attemptedErrorResult(
+      OLLAMA_CLOUD_PROVIDER_LABEL,
+      `Missing ${config.missing} (source: ${config.source})`,
+    );
+  }
+
+  if (config.state === "invalid") {
+    return attemptedErrorResult(
+      OLLAMA_CLOUD_PROVIDER_LABEL,
+      `Invalid config (${config.source}): ${config.error}`,
+    );
+  }
+
+  const result = await queryOllamaCloudQuota(config.config.cookie, {
+    requestTimeoutMs: ctx.config?.requestTimeoutMsConfigured
+      ? ctx.config.requestTimeoutMs
+      : undefined,
+  });
+
+  if (!result) {
+    return attemptedErrorResult(
+      OLLAMA_CLOUD_PROVIDER_LABEL,
+      "No response from Ollama Cloud settings page",
+    );
+  }
+
+  if (!result.success) {
+    return attemptedErrorResult(OLLAMA_CLOUD_PROVIDER_LABEL, result.error);
+  }
+
+  const entries = buildOllamaCloudEntries(result);
+
+  if (entries.length === 0) {
+    return attemptedErrorResult(
+      OLLAMA_CLOUD_PROVIDER_LABEL,
+      "No usage data found on Ollama Cloud settings page",
+    );
+  }
+
+  return attemptedResult(entries);
+}

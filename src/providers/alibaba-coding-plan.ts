@@ -21,6 +21,8 @@ function tierLabel(tier: "lite" | "pro"): string {
 
 export const alibabaCodingPlanProvider: QuotaProvider = {
   id: "alibaba-coding-plan",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(_ctx: QuotaProviderContext): Promise<boolean> {
     const plan = await resolveAlibabaCodingPlanAuthCached({

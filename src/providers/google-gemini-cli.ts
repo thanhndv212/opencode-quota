@@ -1,10 +1,10 @@
 import type { QuotaProvider, QuotaProviderContext, QuotaProviderResult } from "../lib/entries.js";
-import { hasGeminiCliQuotaRuntimeAvailable, queryGeminiCliQuota } from "../lib/google-gemini-cli.js";
-import { parseProviderModelRef } from "../lib/provider-model-matching.js";
 import {
-  formatGoogleAccountErrors,
-  formatGoogleAccountLabel,
-} from "./google-account-format.js";
+  hasGeminiCliQuotaRuntimeAvailable,
+  queryGeminiCliQuota,
+} from "../lib/google-gemini-cli.js";
+import { parseProviderModelRef } from "../lib/provider-model-matching.js";
+import { formatGoogleAccountErrors, formatGoogleAccountLabel } from "./google-account-format.js";
 import { attemptedErrorResult, attemptedResult, notAttemptedResult } from "./result-helpers.js";
 
 function isGeminiCliModel(model: string): boolean {
@@ -25,6 +25,8 @@ async function isGeminiCliConfigured(ctx: QuotaProviderContext): Promise<boolean
 
 export const googleGeminiCliProvider: QuotaProvider = {
   id: "google-gemini-cli",
+  // No verified account-bound fetch snapshot; never reuse shared quota results.
+  cachePolicy: { kind: "uncached" },
 
   async isAvailable(ctx: QuotaProviderContext): Promise<boolean> {
     return await isGeminiCliConfigured(ctx);
