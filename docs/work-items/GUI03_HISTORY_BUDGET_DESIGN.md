@@ -1,6 +1,6 @@
 # GUI-03 history and budget runtime design
 
-Issue: [#15](https://github.com/thanhndv212/opencode-quota/issues/15). Prepared: 2026-10-09. Status: implemented, local acceptance passed on 2026-10-15; PR/hosted CI, review and merged-main acceptance remain pending. Dependencies: GUI-02 and COR-04.
+Issue: [#15](https://github.com/thanhndv212/opencode-quota/issues/15). Prepared: 2026-10-09. Status: implemented, local acceptance passed on 2026-10-15; [PR #43](https://github.com/thanhndv212/opencode-quota/pull/43) / hosted CI, review and merged-main acceptance remain pending. Dependencies: GUI-02 and COR-04.
 
 ## Verified starting point (2026-10-09)
 
