@@ -1,6 +1,6 @@
 # ACC-01 structured accounting compatibility adapter
 
-Issue: [#16](https://github.com/thanhndv212/opencode-quota/issues/16). Status: in progress. Evidence date: 2026-10-15. Dependencies: COR-02 and COR-05 (complete).
+Issue: [#16](https://github.com/thanhndv212/opencode-quota/issues/16). Status: implemented; local acceptance passed; [PR #45](https://github.com/thanhndv212/opencode-quota/pull/45) awaiting hosted acceptance/merge. Evidence date: 2026-10-15. Dependencies: COR-02 and COR-05 (complete).
 
 ## Contract and provenance
 
