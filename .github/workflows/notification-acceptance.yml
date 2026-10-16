@@ -63,7 +63,9 @@ jobs:
             set -euo pipefail
             dunst -conf scripts/fixtures/native-dunstrc > native-evidence/dunst.log 2>&1 &
             daemon=$!
-            trap "kill $daemon || true" EXIT
+            dbus-monitor --session > native-evidence/dbus.log 2>&1 &
+            monitor=$!
+            trap "kill $daemon $monitor || true" EXIT
             QUOTA_SMOKE_NATIVE_NOTICES=1 node scripts/smoke-packaged-app.mjs "$QUOTA_NATIVE_BINARY" native-evidence
           '
       - uses: actions/upload-artifact@v4
