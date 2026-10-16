@@ -41,6 +41,8 @@ These are the completed items with dedicated records. Other completed items have
 
 - [Fork release candidate record](work-items/FND04_FORK_RELEASE_CANDIDATE.md) and [3.11.0-rc.1 notes](RELEASE_NOTES_3.11.0-rc.1.md): completed draft artifact/identity gate, exact artifact/runtime evidence and remaining OS/release limits.
 
+- [3.11.0-rc.2 follow-up notes](RELEASE_NOTES_3.11.0-rc.2.md): native navigation heading correction; exact candidate acceptance pending.
+
 ## Architecture decisions
 
 - [Dual deterministic command surfaces](adr/0002-dual-deterministic-command-surfaces.md): server/web/desktop command output and local TUI dialogs.
