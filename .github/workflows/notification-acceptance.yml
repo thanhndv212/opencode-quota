@@ -18,6 +18,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 22.x
@@ -42,9 +44,12 @@ jobs:
           (cd candidate && sha256sum --check SHA256SUMS)
           node --input-type=module -e '
             import fs from "node:fs";
+            import { execFileSync } from "node:child_process";
             const metadata=JSON.parse(fs.readFileSync("candidate/CANDIDATE.json","utf8"));
             const pkg=JSON.parse(fs.readFileSync("package.json","utf8"));
             if(metadata.name!==pkg.name || metadata.version!==pkg.version || metadata.os!=="linux") throw new Error("Candidate identity/version/platform mismatch");
+            const tagged=execFileSync("git",["rev-parse",`refs/tags/v${pkg.version}^{commit}`],{encoding:"utf8"}).trim();
+            if(metadata.commit!==tagged) throw new Error("Candidate does not match the tested version tag");
           '
           install_dir=$(mktemp -d)
           trap 'rm -rf "$install_dir"' EXIT
