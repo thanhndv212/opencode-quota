@@ -323,5 +323,6 @@ try {
       });
     });
   }
-  await rm(root, { recursive: true, force: true });
+  // Chromium helpers can finish cache writes just after the main process exits.
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }
