@@ -24,7 +24,7 @@ The native adapter acknowledges Electron's `show` event, handles `failed` withou
 
 Schema v4 adds desktop consumer leases. SQLite-managed private backups and transactional migration remain mandatory; simultaneous writers and legacy rollback are covered by actual native Node/Bun tests. Rollback: disable the setting first, stop writers, preserve the current database and restore the verified private pre-upgrade backup if downgrading to a schema-incompatible runtime. Never copy a live SQLite source through ordinary filesystem APIs.
 
-## Validation and remaining gates
+## Initial implementation validation and gates — 2026-10-15
 
 Node 22.23.3/pnpm 10.0.0: 150 files / 1,548 tests, typecheck, clean installed-tarball consumer, account-cache smoke, native Node/Bun 1.3.14 history compatibility and installed macOS Electron 42.5.0 smoke passed on the final implementation, including status diagnostics and selected-window filtering. Tests exercise real competing helper processes, desktop preference/expiry/withdrawal, denied/unsupported and uncertain native adapter outcomes, toast HTTP failures, default-off behavior, overlap protection and selected-window click IPC.
 

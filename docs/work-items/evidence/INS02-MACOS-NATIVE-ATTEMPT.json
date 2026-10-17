@@ -37,7 +37,7 @@
     "Finder reopen lacked explicit isolated Electron user-data-dir and is excluded from isolated acceptance",
     "No Developer ID, notarization or Gatekeeper certification"
   ],
-  "cleanup": "Temporary-path app instances stopped; standard-location validation instance remains running for requested native card observation",
+  "cleanup": "At this intermediate checkpoint the standard-location instance was still running; final acceptance record documents permission restoration, quit and uninstall",
   "followUp": {
     "testLocation": "/Applications/Quota Validation rc2.app",
     "existingAppReplaced": false,
@@ -47,5 +47,7 @@
     "activationObserved": false,
     "classification": "show acknowledgement only; not observed OS delivery certification",
     "remainingUiAction": "User asked to open Notification Center after zero-size agent capture and unsupported Fn key"
-  }
+  },
+  "checkpoint": "Intermediate failed/acknowledgement-only phases; superseded by final observed acceptance",
+  "finalRecord": "INS02-MACOS-NATIVE-ACCEPTANCE.json"
 }
