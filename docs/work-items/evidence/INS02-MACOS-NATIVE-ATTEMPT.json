@@ -17,24 +17,35 @@
     "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     "providerId": "fixture-os-validation",
     "windowId": "hourly",
-    "state": "pending",
-    "deliveredAt": null,
-    "deliveredChannel": null
+    "state": "delivered",
+    "deliveredAt": 1792247624948,
+    "deliveredChannel": "desktop"
   },
   "osDiagnostics": {
     "entitlementCheck": "matching bundle identifiers succeeded",
     "addRequest": "hasError: 1",
-    "specificErrorCause": "not established"
+    "specificErrorCause": "not established",
+    "clientValidation": "Temporary-path/Finder attempt: failed to find or validate client before authorization"
   },
   "validCodeSigningIdentities": 0,
   "visibleNativeBannerObserved": false,
   "nativeActivationObserved": false,
-  "acceptance": "FAILED / remains open",
+  "acceptance": "PARTIAL / visible native card and activation remain open",
   "limitations": [
     "Synthetic reset; no live-provider evidence",
     "Metadata-modified local ad-hoc copy, not unchanged release artifact certification",
     "Finder reopen lacked explicit isolated Electron user-data-dir and is excluded from isolated acceptance",
     "No Developer ID, notarization or Gatekeeper certification"
   ],
-  "cleanup": "Task-owned validation app processes stopped; no quota settings or system notification preferences edited"
+  "cleanup": "Temporary-path app instances stopped; standard-location validation instance remains running for requested native card observation",
+  "followUp": {
+    "testLocation": "/Applications/Quota Validation rc2.app",
+    "existingAppReplaced": false,
+    "privateXdgAndExplicitElectronUserDataDir": true,
+    "nativeShowAcknowledged": true,
+    "visibleCardObserved": false,
+    "activationObserved": false,
+    "classification": "show acknowledgement only; not observed OS delivery certification",
+    "remainingUiAction": "User asked to open Notification Center after zero-size agent capture and unsupported Fn key"
+  }
 }
