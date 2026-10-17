@@ -1,0 +1,40 @@
+{
+  "evidenceDate": "2026-10-17",
+  "platform": "macOS arm64",
+  "candidateVersion": "3.11.0-rc.2",
+  "sourceZipSha256": "1fbaf0ce9c96724be4b03db35c7f5040a84263386a57317f02c771156acb8ec1",
+  "testBundleIdentifier": "ai.opencode.quota.validation.rc2",
+  "testChanges": [
+    "bundle identifier/display name",
+    "local ad-hoc signing",
+    "later Finder-launch environment metadata attempt"
+  ],
+  "productionJavaScriptChanged": false,
+  "computerUseAccess": "granted and native UI inspected",
+  "nativeCallbacksMocked": false,
+  "observedHistoryStatus": "Desktop delivery failed or was denied; plugin fallback remains available. Reload settings to retry desktop delivery.",
+  "fixtureEvent": {
+    "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "providerId": "fixture-os-validation",
+    "windowId": "hourly",
+    "state": "pending",
+    "deliveredAt": null,
+    "deliveredChannel": null
+  },
+  "osDiagnostics": {
+    "entitlementCheck": "matching bundle identifiers succeeded",
+    "addRequest": "hasError: 1",
+    "specificErrorCause": "not established"
+  },
+  "validCodeSigningIdentities": 0,
+  "visibleNativeBannerObserved": false,
+  "nativeActivationObserved": false,
+  "acceptance": "FAILED / remains open",
+  "limitations": [
+    "Synthetic reset; no live-provider evidence",
+    "Metadata-modified local ad-hoc copy, not unchanged release artifact certification",
+    "Finder reopen lacked explicit isolated Electron user-data-dir and is excluded from isolated acceptance",
+    "No Developer ID, notarization or Gatekeeper certification"
+  ],
+  "cleanup": "Task-owned validation app processes stopped; no quota settings or system notification preferences edited"
+}
